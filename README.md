@@ -99,7 +99,7 @@ cross-origin (CORS) depuis une page web.
 |---|---|---|---|
 | Marmiton | ✅ recherche libre | ✅ | ✅ |
 | PtitChef | ✅ pages thématiques (`lasagnes`, `quiche`…) | ✅ | ✅ |
-| Ricardo | ✅ noms de recettes du plan du site (`sitemap.xml`) | ✅ | ✅ (chroniques) |
+| Ricardo | — | ✅ | ✅ (chroniques) |
 | Cuisine AZ, Jamie Oliver, 750g | — | ✅ | ✅ |
 | Autres domaines de `SITES` | — | ✅ | — |
 
@@ -109,9 +109,9 @@ ses recettes s'affichent à cocher, comme pour une recherche. Le format des URL 
 de chaque site est défini dans `MOTIFS_RECETTE`.
 
 Jamie Oliver interdit l'accès automatisé à ses pages de recherche (`robots.txt`).
-La recherche du site Ricardo passe par son API, elle aussi interdite aux robots : la
-source Ricardo cherche donc les mots demandés dans les noms des recettes de son plan de
-site public (`sitemap.xml`), lu une fois par lancement du serveur.
+La recherche du site Ricardo passe par son API, elle aussi interdite aux robots, et son
+plan de site (`sitemap.xml`) ne répond pas (erreur 504 après 90 s, constatée le 9 octobre 2026) :
+Ricardo s'utilise donc par URL (recette ou chronique).
 
 Pour vérifier que les sources répondent encore (après une mise à jour d'un site) :
 
