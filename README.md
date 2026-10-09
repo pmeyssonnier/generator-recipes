@@ -82,8 +82,17 @@ python serveur_recettes.py
 
 ### Google Colab
 
-`colab/import_recettes_colab.py` fait la même extraction en lot dans un notebook
-et produit un `recettes.json` à charger dans l'interface.
+`colab/import_recettes_colab.py` fait l'import en lot dans un notebook. Il télécharge
+`serveur_recettes.py` depuis GitHub et **réutilise son code** : même extraction JSON-LD, mêmes
+sources (Marmiton, PtitChef), mêmes règles (`robots.txt`, pause entre requêtes, domaines de `SITES`).
+Il fusionne les recettes dans `recettes.json` (par URL), à charger ensuite dans l'interface.
+
+```python
+import_recipes("blanquette", max_results=8)            # recherche (source="ptitchef" possible)
+import_url("https://www.marmiton.org/recettes/recette_....aspx")
+import_page("https://www.ricardocuisine.com/...")      # page qui liste plusieurs recettes
+generer(charger_base(), avec=["veau"], sans=["crème"], max_min=180)
+```
 
 ## Architecture
 
