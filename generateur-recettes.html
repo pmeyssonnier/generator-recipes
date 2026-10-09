@@ -52,6 +52,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);
   display:flex;flex-direction:column;cursor:pointer;transition:transform .12s}
 .card:hover{transform:translateY(-2px)}
+.card:focus-within{box-shadow:0 0 0 2px var(--accent)}
+.card-link{font:inherit;color:inherit;background:none;border:none;padding:0;margin:0;text-align:left;cursor:pointer}
+.card-link:hover{border:none;text-decoration:underline}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .card .img{aspect-ratio:4/3;background:var(--accent-soft);display:flex;align-items:center;
   justify-content:center;font-size:2.5rem;overflow:hidden}
 .card .img img{width:100%;height:100%;object-fit:cover;display:block}
@@ -161,7 +165,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 <dialog id="dlgRecette">
   <div class="dlg-head">
     <div><h2 id="dTitre"></h2><div class="meta" id="dMeta" style="margin-top:6px"></div></div>
-    <button class="icon-btn" data-close>✕</button>
+    <button class="icon-btn" data-close aria-label="Fermer">✕</button>
   </div>
   <div class="dlg-body">
     <h4>Ingrédients</h4><ul class="ing" id="dIng"></ul>
@@ -175,7 +179,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 </dialog>
 
 <dialog id="dlgPanier">
-  <div class="dlg-head"><h2>🛒 Liste de courses</h2><button class="icon-btn" data-close>✕</button></div>
+  <div class="dlg-head"><h2>🛒 Liste de courses</h2><button class="icon-btn" data-close aria-label="Fermer">✕</button></div>
   <div class="dlg-body"><textarea id="txtCourses"></textarea></div>
   <div class="dlg-foot">
     <button id="btnViderPanier">Vider le panier</button>
@@ -185,7 +189,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 </dialog>
 
 <dialog id="dlgImport">
-  <div class="dlg-head"><h2>🌐 Importer des recettes</h2><button class="icon-btn" data-close>✕</button></div>
+  <div class="dlg-head"><h2>🌐 Importer des recettes</h2><button class="icon-btn" data-close aria-label="Fermer">✕</button></div>
   <div class="dlg-body">
     <h4>Recherche</h4>
     <div class="inline" style="margin-bottom:8px">
@@ -212,7 +216,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 </dialog>
 
 <dialog id="dlgExport">
-  <div class="dlg-head"><h2>💾 Exporter en JSON</h2><button class="icon-btn" data-close>✕</button></div>
+  <div class="dlg-head"><h2>💾 Exporter en JSON</h2><button class="icon-btn" data-close aria-label="Fermer">✕</button></div>
   <div class="dlg-body">
     <div class="opt">
       <button id="expTout">📚 Toute la base<small id="expToutInfo"></small></button>
@@ -395,7 +399,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       return `<article class="card" data-i="${i}">
         <div class="img">${r.image ? `<img src="${esc(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : "🍽"}</div>
         <div class="body">
-          <h3>${esc(r.nom)}</h3>
+          <h3><button type="button" class="card-link" aria-haspopup="dialog">${esc(r.nom)}</button></h3>
           <div class="meta">
             <span>⭐ ${r._note ?? "–"}${r._avis ? ` (${r._avis})` : ""}</span>
             <span>⏱ ${fmtMin(r._tps)}</span>
@@ -405,8 +409,8 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
           <div class="foot">
             <span class="meta">${esc(r.portions || "")}</span>
             <span>
-              <button class="icon-btn ${fav ? "on" : "off"}" data-fav="${i}" title="Favori">❤️</button>
-              <button class="icon-btn ${pan ? "on" : "off"}" data-pan="${i}" title="Ajouter aux courses">🛒</button>
+              <button type="button" class="icon-btn ${fav ? "on" : "off"}" data-fav="${i}" title="Favori" aria-label="Favori : ${esc(r.nom)}" aria-pressed="${fav}">❤️</button>
+              <button type="button" class="icon-btn ${pan ? "on" : "off"}" data-pan="${i}" title="Ajouter aux courses" aria-label="Courses : ${esc(r.nom)}" aria-pressed="${pan}">🛒</button>
             </span>
           </div>
         </div></article>`;
@@ -428,9 +432,10 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
 
   // ---------- Détail ----------
-  let courante = null;
+  let courante = null, indexCourant = -1;
   function ouvrir(r) {
     courante = r;
+    indexCourant = recettes.indexOf(r);
     $("dTitre").textContent = r.nom;
     $("dMeta").innerHTML = [
       `⭐ ${r._note ?? "–"}${r._avis ? ` (${r._avis} avis)` : ""}`,
@@ -618,6 +623,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     renderChips(); render();
   });
 
+  // Après un re-rendu de la grille, rend le focus clavier au bouton qui vient d'être actionné
+  const refocus = sel => $("grid").querySelector(sel)?.focus();
+
   $("grid").addEventListener("click", e => {
     if (e.target.id === "reroll") return surprise();
     if (e.target.id === "voirTout") { st.surprise = null; return render(); }
@@ -626,9 +634,13 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       const r = recettes[+fav.dataset.fav];
       const k = cle(r);
       st.favs.has(k) ? st.favs.delete(k) : st.favs.add(k);
-      save(); return render();
+      save(); render();
+      return refocus(`[data-fav="${fav.dataset.fav}"]`);      // render() recrée les boutons
     }
-    if (pan) return togglePanier(recettes[+pan.dataset.pan]);
+    if (pan) {
+      togglePanier(recettes[+pan.dataset.pan]);
+      return refocus(`[data-pan="${pan.dataset.pan}"]`);
+    }
     const card = e.target.closest(".card");
     if (card) ouvrir(recettes[+card.dataset.i]);
   });
@@ -695,6 +707,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   $("impUrl").addEventListener("keydown", e => {
     if (e.key === "Enter") importerOuLister(e.target.value.trim());
   });
+
+  // La grille a pu être recréée pendant que la fiche était ouverte (favori, courses) :
+  // à la fermeture, le focus retourne sur le titre de la recette ouverte.
+  $("dlgRecette").addEventListener("close", () =>
+    $("grid").querySelector(`.card[data-i="${indexCourant}"] .card-link`)?.focus());
 
   document.querySelectorAll("[data-close]").forEach(b =>
     b.addEventListener("click", () => b.closest("dialog").close()));
