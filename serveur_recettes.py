@@ -156,46 +156,6 @@ def fetch(url):
     return txt
 
 
-# ---------------- Plans de site (sitemap.xml) ----------------
-LOC_RE = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.IGNORECASE)
-_sitemaps = {}
-
-
-def urls_sitemap(racine, garder_enfant=lambda u: True, max_enfants=40):
-    """Toutes les URL d'un plan de site (suit un index de plans, gère le .gz).
-    Mis en cache pour la durée de vie du serveur. Outil générique, utilisable par
-    une future source de recherche (non utilisé par les sources actuelles)."""
-    if racine in _sitemaps:
-        return _sitemaps[racine]
-
-    def lire(u):
-        data, charset = telecharger(u, timeout=60)
-        if data[:2] == b"\x1f\x8b":                 # fichier .xml.gz
-            data = gzip.decompress(data)
-        return data.decode("utf-8", errors="replace")
-
-    print(f"   Lecture du plan du site {domaine(racine)} (première recherche, peut prendre un moment)…")
-    try:
-        xml = lire(racine)
-    except (AccesInterdit, OSError) as e:          # OSError couvre HTTPError, URLError, TimeoutError
-        raise ValueError(f"Le plan du site {domaine(racine)} ne répond pas ({type(e).__name__} : {e})") from e
-    locs = [html.unescape(x) for x in LOC_RE.findall(xml)]
-    if "<sitemapindex" in xml.lower():
-        enfants = [u for u in locs if garder_enfant(u)] or locs
-        urls = []
-        for u in enfants[:max_enfants]:
-            try:
-                urls += [html.unescape(x) for x in LOC_RE.findall(lire(u))]
-            except (AccesInterdit, OSError) as e:   # un sous-plan en échec n'arrête pas les autres
-                print(f"   ⚠ Sous-plan ignoré ({type(e).__name__}) : {u}")
-                continue
-    else:
-        urls = locs
-    _sitemaps[racine] = urls
-    print(f"   {len(urls)} URL dans le plan du site {domaine(racine)}")
-    return urls
-
-
 def domaine(url):
     return urlparse(url).netloc.lower().split(":")[0]
 
@@ -363,23 +323,6 @@ def recherche_ptitchef(q, n=10):
     return extraire_liens(page, base,
                           r'href="((?:https://www\.ptitchef\.com)?/recettes/[a-z0-9-]+/[a-z0-9-]+-fid-\d+)"',
                           titre, n)
-
-
-MOTS_VIDES = {"de", "du", "des", "la", "le", "les", "l", "d", "a", "au", "aux", "et", "en", "un", "une"}
-
-
-def mots_cles(q):
-    """Outil générique (non utilisé par les sources actuelles).
-    « Lasagnes aux épinards » → ["lasagne", "epinard"] (sans accents, mots vides,
-    ni pluriel en s/x, pour une correspondance par préfixe)."""
-    out = []
-    for m in slugifier(q).split("-"):
-        if not m or m in MOTS_VIDES:
-            continue
-        if len(m) > 3 and m.endswith(("s", "x")):
-            m = m[:-1]
-        out.append(m)
-    return out
 
 
 # ---------------- Pages de sélection (liste de recettes) ----------------
