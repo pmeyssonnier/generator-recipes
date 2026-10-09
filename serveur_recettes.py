@@ -246,7 +246,15 @@ class Handler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")  # utile si la page est ouverte en file://
+        self.send_header("Access-Control-Allow-Private-Network", "true")  # page GitHub → localhost
         super().end_headers()
+
+    def do_OPTIONS(self):
+        """Pré-vol CORS envoyé par le navigateur quand la page vient de GitHub Pages."""
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
+        self.end_headers()
 
     def log_message(self, fmt, *args):
         if "/api/" in str(args[0] if args else ""):

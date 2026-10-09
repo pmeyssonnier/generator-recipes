@@ -38,6 +38,17 @@ Le navigateur s'ouvre sur <http://localhost:8765>.
 Sans serveur, `generateur-recettes.html` s'ouvre aussi en double-clic pour consulter
 une base chargée via **📂 Charger JSON** (l'import en ligne demande le serveur).
 
+### Version en ligne (GitHub Pages)
+
+<https://pmeyssonnier.github.io/generator-recipes/>
+
+La page en ligne fonctionne sans rien installer pour consulter, filtrer, charger un JSON,
+exporter et faire la liste de courses. GitHub Pages ne peut pas exécuter Python : pour
+l'**import** de recettes, lance `serveur_recettes.py` sur le même appareil (PC ou Termux),
+la page en ligne l'utilisera automatiquement via `http://localhost:8765`.
+
+Les recettes, favoris et panier restent dans le navigateur de chaque appareil.
+
 ### Android (Termux)
 
 Installer Termux depuis F-Droid, puis :
