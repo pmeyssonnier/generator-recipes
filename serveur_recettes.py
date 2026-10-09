@@ -43,6 +43,13 @@ SITES = {
     "chefkoch.de", "dagelijksekost.vrt.be", "24kitchen.nl", "24kitchen.be", "ah.nl", "njam.tv",
 }
 
+# Origines web autorisées à appeler l'API (en plus de la page servie par ce serveur).
+# Ajouts possibles via RECETTES_ORIGINES="https://exemple.org,null"
+# ("null" = page ouverte en file:// — non autorisé par défaut, car les iframes
+#  sandboxées de n'importe quel site envoient aussi Origin: null).
+ORIGINES = {"https://pmeyssonnier.github.io"}
+ORIGINES |= {o.strip().rstrip("/") for o in os.environ.get("RECETTES_ORIGINES", "").split(",") if o.strip()}
+
 _net_lock = threading.Lock()
 _file_lock = threading.Lock()
 _last = [0.0]
@@ -244,16 +251,45 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **k):
         super().__init__(*a, directory=DIR, **k)
 
+    # ---- Contrôle d'origine ----
+    def origine_ok(self, origin):
+        """Origine autorisée : liste ORIGINES, ou la page servie par ce serveur lui-même."""
+        if origin in ORIGINES:
+            return True
+        host = self.headers.get("Host", "")
+        return bool(host) and origin in (f"http://{host}", f"https://{host}")
+
+    def refus_origine(self):
+        """None si la requête API est acceptable, sinon le motif du refus."""
+        origin = self.headers.get("Origin")
+        if origin:
+            return None if self.origine_ok(origin) else f"Origine non autorisée : {origin}"
+        # Pas d'en-tête Origin mais requête venant d'un autre site (<img>, <link>…)
+        if self.headers.get("Sec-Fetch-Site") in ("cross-site", "same-site"):
+            return "Requête inter-sites non autorisée"
+        return None  # même origine, navigation directe, curl…
+
     def end_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")  # utile si la page est ouverte en file://
-        self.send_header("Access-Control-Allow-Private-Network", "true")  # page GitHub → localhost
+        origin = self.headers.get("Origin")
+        if origin and self.origine_ok(origin):
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Private-Network", "true")  # page GitHub → localhost
+            self.send_header("Vary", "Origin")
         super().end_headers()
 
     def do_OPTIONS(self):
-        """Pré-vol CORS envoyé par le navigateur quand la page vient de GitHub Pages."""
+        """Pré-vol CORS (page GitHub Pages → localhost) : accepté seulement pour une origine autorisée."""
+        origin = self.headers.get("Origin")
+        if not (origin and self.origine_ok(origin)):
+            self.send_response(403)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         self.send_response(204)
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "*")
+        self.send_header("Access-Control-Max-Age", "600")
+        self.send_header("Content-Length", "0")
         self.end_headers()
 
     def log_message(self, fmt, *args):
@@ -292,6 +328,11 @@ class Handler(SimpleHTTPRequestHandler):
             return super().do_GET()
         if not u.path.startswith("/api/"):
             return super().do_GET()
+
+        refus = self.refus_origine()
+        if refus:
+            print("   ⛔", self.client_address[0], refus)
+            return self.send_json({"erreur": refus}, 403)
 
         qs = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
