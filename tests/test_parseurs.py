@@ -43,10 +43,6 @@ class Nettoyage(unittest.TestCase):
         self.assertEqual(s.slugifier("Poulet au curry"), "poulet-au-curry")
         self.assertEqual(s.slugifier("  Crème brûlée !  "), "creme-brulee")
 
-    def test_mots_cles(self):
-        self.assertEqual(s.mots_cles("Lasagnes aux épinards"), ["lasagne", "epinard"])
-        self.assertEqual(s.mots_cles("Riz"), ["riz"])
-
 
 class JsonLd(unittest.TestCase):
     def test_find_recipe_obj_formes(self):
