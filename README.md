@@ -55,6 +55,11 @@ une base chargée via **📂 Charger JSON**. Pour importer depuis une page ouver
 - Le serveur ne sert **que** la page HTML : ni `.git/`, ni le code source, ni la base JSON.
 - L'import par URL est limité aux domaines de `SITES`. Les redirections sont suivies à la main
   et revalidées (domaine autorisé, pas de retour en `http`, `robots.txt`, 5 sauts maximum).
+- Ce qui écrit dans la base (`POST /api/recipe`) exige l'en-tête `X-Recettes` : un site tiers ne
+  peut pas l'envoyer sans pré-vol CORS, que seules les origines autorisées obtiennent. Les `GET`
+  ne modifient jamais rien.
+- Les pages téléchargées sont limitées à 5 Mo (compressées comme décompressées) et 200 pages
+  restent en mémoire au maximum.
 - La page applique une politique CSP, n'accepte que des URL `http(s)` pour les liens et images
   d'un JSON importé, et affiche les images sans transmettre de référent.
 
@@ -99,7 +104,8 @@ generer(charger_base(), avec=["veau"], sans=["crème"], max_min=180)
 
 ```
 navigateur (generateur-recettes.html)
-   │  /api/search?q=…   /api/recipe?url=…   /api/base   /api/ping
+   │  GET  /api/search?q=…   /api/liste?url=…   /api/base   /api/ping
+   │  POST /api/recipe?url=…   (importe et enregistre ; en-tête X-Recettes)
    ▼
 serveur_recettes.py  (127.0.0.1:8765)
    │  urllib → site source, 1,5 s minimum entre deux requêtes
@@ -153,7 +159,11 @@ Ces tests et une vérification `pyflakes` tournent automatiquement sur GitHub Ac
   l'ajouter au dictionnaire `SOURCES`, puis lancer `tester_sources.py`.
 
 Le serveur respecte le `robots.txt` de chaque site : une page interdite aux robots est
-refusée avec un message explicite au lieu d'être téléchargée.
+refusée avec un message explicite au lieu d'être téléchargée. Il s'identifie honnêtement
+(`User-Agent : Mozilla/5.0 (compatible; RecettesPerso/1.0; +…)`) et applique les règles visant
+`RecettesPerso`, sinon celles de `*`. Le `robots.txt` est relu toutes les heures ; s'il est
+injoignable ou en erreur 5xx, l'accès est refusé par prudence (RFC 9309) et réessayé à la requête
+suivante. Si un site refuse cet identifiant, `RECETTES_USER_AGENT="Mozilla/5.0 …"` le remplace.
 
 ## Usage responsable
 

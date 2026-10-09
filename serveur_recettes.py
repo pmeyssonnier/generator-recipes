@@ -12,7 +12,7 @@ Compatible Windows, Linux, macOS et Android (Termux).
 Les recettes importées sont enregistrées dans recettes.json,
 dans le même dossier que ce script (même format que le script Colab).
 """
-import gzip, html, ipaddress, json, os, re, shutil, socket, subprocess, sys, threading, time, unicodedata, webbrowser
+import html, ipaddress, json, os, re, shutil, socket, subprocess, sys, threading, time, unicodedata, webbrowser, zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
@@ -28,9 +28,15 @@ BASE_FILE = os.path.join(DIR, "recettes.json")
 ANCIEN_BASE_FILE = os.path.join(DIR, "recettes_marmiton.json")   # ancien nom, migré au lancement
 BASE = "https://www.marmiton.org"
 PAUSE = 1.5  # secondes minimum entre deux requêtes sortantes
+# Le serveur s'identifie (au lieu d'imiter un navigateur) et applique les règles du robots.txt
+# visant ce nom. Si un site refuse cet identifiant : RECETTES_USER_AGENT="Mozilla/5.0 …"
+ROBOTS_NOM = "RecettesPerso"
+USER_AGENT = (os.environ.get("RECETTES_USER_AGENT", "").strip() or
+              f"Mozilla/5.0 (compatible; {ROBOTS_NOM}/1.0; +https://github.com/pmeyssonnier/generator-recipes)")
+MAX_OCTETS = 5 * 1024 * 1024      # taille maximale d'une page téléchargée (après décompression)
+ROBOTS_TTL = 3600                 # secondes de validité d'un robots.txt en mémoire
 HEADERS = {
-    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                   "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"),
+    "User-Agent": USER_AGENT,
     "Accept-Language": "fr-BE,fr;q=0.9",
     "Accept-Encoding": "gzip",
 }
@@ -62,6 +68,7 @@ _net_lock = threading.Lock()
 _file_lock = threading.Lock()
 _last = [0.0]
 _cache = {}
+MAX_CACHE = 200          # pages gardées en mémoire
 
 
 # ---------------- Page HTML ----------------
@@ -79,30 +86,57 @@ class AccesInterdit(Exception):
     """Le robots.txt du site interdit l'accès automatisé à cette page."""
 
 
-_robots = {}
+class ReponseTropGrosse(ValueError):
+    """La page téléchargée dépasse MAX_OCTETS."""
+
+
+_robots = {}          # racine du site -> (RobotFileParser, expiration)
 _robots_lock = threading.Lock()
 
 
 def robots_autorise(url):
-    """Respecte le robots.txt du site (règles « User-agent: * »), mis en cache par site."""
+    """Respecte le robots.txt du site (règles visant RecettesPerso, sinon « * »).
+    Conservé ROBOTS_TTL secondes. Un robots.txt injoignable ou en erreur 5xx interdit l'accès
+    (RFC 9309), sans être mémorisé : la requête suivante réessaie."""
     p = urlparse(url)
     racine = f"{p.scheme}://{p.netloc}"
     with _robots_lock:
-        rp = _robots.get(racine)
-    if rp is None:
+        entree = _robots.get(racine)
+    if entree is None or entree[1] < time.time():
         rp = RobotFileParser()
         try:
-            rp.parse(fetch(racine + "/robots.txt").splitlines())
+            data, charset = telecharger(racine + "/robots.txt")
+            rp.parse(data.decode(charset, errors="replace").splitlines())
         except HTTPError as e:
             if e.code in (401, 403):
                 rp.disallow_all = True      # robots.txt protégé : on s'abstient
+            elif e.code >= 500:
+                raise AccesInterdit(f"Le robots.txt de {domaine(url)} est indisponible (HTTP {e.code}) : "
+                                    "accès refusé par prudence, réessaie plus tard") from None
             else:
                 rp.allow_all = True         # pas de robots.txt (404…) : aucune restriction
-        except URLError:
-            rp.allow_all = True             # réseau : la requête suivante échouera d'elle-même
+        except (AccesInterdit, ValueError):
+            raise
+        except OSError as e:                # URLError, délai dépassé…
+            raise AccesInterdit(f"Le robots.txt de {domaine(url)} est injoignable ({type(e).__name__}) : "
+                                "accès refusé par prudence, réessaie plus tard") from None
+        entree = (rp, time.time() + ROBOTS_TTL)
         with _robots_lock:
-            _robots[racine] = rp
-    return rp.can_fetch("*", url)
+            _robots[racine] = entree
+    return entree[0].can_fetch(ROBOTS_NOM, url)
+
+
+def lire_limite(r):
+    """Corps de la réponse (décompressé si gzip) sans dépasser MAX_OCTETS, ni compressé ni décompressé."""
+    data = r.read(MAX_OCTETS + 1)
+    if len(data) > MAX_OCTETS:
+        raise ReponseTropGrosse(f"Page trop volumineuse (plus de {MAX_OCTETS // 1024 // 1024} Mo)")
+    if r.headers.get("Content-Encoding") == "gzip":
+        d = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        data = d.decompress(data, MAX_OCTETS + 1)
+        if len(data) > MAX_OCTETS or d.unconsumed_tail:
+            raise ReponseTropGrosse(f"Page trop volumineuse (plus de {MAX_OCTETS // 1024 // 1024} Mo décompressée)")
+    return data
 
 
 class _SansRedirection(HTTPRedirectHandler):
@@ -128,9 +162,7 @@ def telecharger(url, timeout=20, _sauts=0):
             time.sleep(wait)
         try:
             with _opener.open(Request(url, headers=HEADERS), timeout=timeout) as r:
-                data = r.read()
-                if r.headers.get("Content-Encoding") == "gzip":
-                    data = gzip.decompress(data)
+                data = lire_limite(r)
                 charset = r.headers.get_content_charset() or "utf-8"
         except HTTPError as e:
             if e.code not in REDIRECTIONS or not e.headers.get("Location"):
@@ -153,6 +185,8 @@ def fetch(url):
         return _cache[url]
     data, charset = telecharger(url)
     txt = data.decode(charset, errors="replace")
+    if len(_cache) >= MAX_CACHE:
+        _cache.pop(next(iter(_cache)))        # plus ancienne entrée
     _cache[url] = txt
     return txt
 
@@ -455,8 +489,12 @@ class Handler(BaseHTTPRequestHandler):
         host = self.headers.get("Host", "")      # déjà validé par hote_ok() dans do_GET
         return bool(host) and origin in (f"http://{host}", f"https://{host}")
 
-    def refus_origine(self):
-        """None si la requête API est acceptable, sinon le motif du refus."""
+    def refus_origine(self, ecriture=False):
+        """None si la requête API est acceptable, sinon le motif du refus.
+        Une requête qui modifie la base (POST) doit en plus porter l'en-tête X-Recettes : un site
+        tiers ne peut pas l'envoyer sans pré-vol CORS, que seul une origine autorisée obtient."""
+        if ecriture and not self.headers.get("X-Recettes"):
+            return "En-tête X-Recettes manquant"
         origin = self.headers.get("Origin")
         if origin:
             return None if self.origine_ok(origin) else f"Origine non autorisée : {origin}"
@@ -482,7 +520,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "*")
         self.send_header("Access-Control-Max-Age", "600")
         self.send_header("Content-Length", "0")
@@ -540,10 +578,35 @@ class Handler(BaseHTTPRequestHandler):
         if not u.path.startswith("/api/"):
             return self.send_json({"erreur": "Introuvable"}, 404)
 
-        refus = self.refus_origine()
+        self.api("GET", u)
+
+    def do_POST(self):
+        if not hote_ok(self.headers.get("Host")):
+            print("   ⛔", self.client_address[0], "Host refusé :", self.headers.get("Host"))
+            return self.send_json({"erreur": "Hôte non autorisé"}, 403)
+        u = urlparse(self.path)
+        if not u.path.startswith("/api/"):
+            return self.send_json({"erreur": "Introuvable"}, 404)
+        try:                                   # corps ignoré (les paramètres sont dans l'URL) mais lu
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        if 0 < n <= 1_000_000:
+            self.rfile.read(n)
+        self.api("POST", u)
+
+    ROUTES_GET = {"/api/ping", "/api/base", "/api/sources", "/api/search", "/api/liste"}
+    ROUTES_POST = {"/api/recipe"}              # seule route qui écrit dans la base
+
+    def api(self, methode, u):
+        refus = self.refus_origine(ecriture=(methode == "POST"))
         if refus:
             print("   ⛔", self.client_address[0], refus)
             return self.send_json({"erreur": refus}, 403)
+        autre = self.ROUTES_POST if methode == "GET" else self.ROUTES_GET
+        if u.path in autre:
+            return self.send_json({"erreur": f"Méthode {methode} non prise en charge ici "
+                                             f"(utilise {'POST' if methode == 'GET' else 'GET'})"}, 405)
 
         qs = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
@@ -586,6 +649,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"erreur": str(e)}, 400)
         except AccesInterdit as e:
             self.send_json({"erreur": str(e)}, 403)
+        except ReponseTropGrosse as e:
+            self.send_json({"erreur": str(e)}, 502)
         except HTTPError as e:
             self.send_json({"erreur": f"Le site a répondu HTTP {e.code}"}, 502)
         except URLError as e:
