@@ -14,7 +14,7 @@ en tirer au sort et préparer une liste de courses.
 | Fonction | Détail |
 |---|---|
 | Import | Recherche par mot-clé sur Marmiton, ou import par URL depuis les sites de la liste `SITES` |
-| Sauvegarde | Automatique dans `recettes_marmiton.json` + stockage du navigateur |
+| Sauvegarde | Automatique dans `recettes.json` + stockage du navigateur (l'ancien `recettes_marmiton.json` est renommé automatiquement au lancement) |
 | Filtres | Texte libre, ingrédients avec / sans, temps max, note minimale, catégorie, favoris |
 | 🎲 Surprends-moi | 3 recettes tirées au hasard parmi les résultats filtrés |
 | Fiche recette | Ingrédients à cocher, étapes, lien vers la source |
@@ -83,7 +83,7 @@ python serveur_recettes.py
 ### Google Colab
 
 `colab/import_recettes_colab.py` fait la même extraction en lot dans un notebook
-et produit un `recettes_marmiton.json` à charger dans l'interface.
+et produit un `recettes.json` à charger dans l'interface.
 
 ## Architecture
 
@@ -93,7 +93,7 @@ navigateur (generateur-recettes.html)
    ▼
 serveur_recettes.py  (127.0.0.1:8765)
    │  urllib → site source, 1,5 s minimum entre deux requêtes
-   └─ fusionne chaque recette dans recettes_marmiton.json
+   └─ fusionne chaque recette dans recettes.json
 ```
 
 Le serveur est nécessaire parce que les sites de recettes n'autorisent pas les appels
@@ -148,7 +148,7 @@ refusée avec un message explicite au lieu d'être téléchargée.
 ## Usage responsable
 
 Projet à usage **personnel**. Les recettes extraites restent la propriété de leurs sites
-d'origine : `recettes_marmiton.json` et les exports sont exclus du dépôt (`.gitignore`)
+d'origine : `recettes.json` et les exports sont exclus du dépôt (`.gitignore`)
 et ne doivent pas être redistribués. Respecter les conditions d'utilisation de chaque
 site et garder un volume de requêtes modeste.
 

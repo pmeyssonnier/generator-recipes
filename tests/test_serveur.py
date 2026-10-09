@@ -69,7 +69,7 @@ class Serveur(unittest.TestCase):
             return e.code, e.read()
 
     def test_fichiers_sensibles_non_servis(self):
-        for p in ("/serveur_recettes.py", "/.git/config", "/.git/HEAD", "/colab/", "/recettes_marmiton.json",
+        for p in ("/serveur_recettes.py", "/.git/config", "/.git/HEAD", "/colab/", "/recettes.json", "/recettes_marmiton.json",
                   "/../serveur_recettes.py", "/README.md"):
             self.assertEqual(self.get(p)[0], 404, p)
 
