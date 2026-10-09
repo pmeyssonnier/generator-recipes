@@ -452,7 +452,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
 
   // ---------- Serveur Python local ----------
-  const API = location.protocol.startsWith("http") ? "" : "http://localhost:8765";
+  // Page servie par le serveur Python (localhost / réseau local) → même origine.
+  // Page servie par GitHub Pages ou ouverte en file:// → serveur local de l'appareil.
+  const SUR_SERVEUR = location.protocol.startsWith("http") &&
+    /^(localhost|127\.|\[::1\]|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
+  const API = SUR_SERVEUR ? "" : "http://localhost:8765";
   let busy = false;
 
   async function api(path) {
