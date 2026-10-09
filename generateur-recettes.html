@@ -299,9 +299,12 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
 
   // ---------- Import JSON ----------
-  function importer(data) {
+  // Seules les recettes reçues sont (ré)indexées. Avec differe = true, l'enregistrement
+  // et l'affichage sont repoussés : l'appelant termine par valider() (import en lot).
+  function importer(data, { differe = false } = {}) {
     const arr = Array.isArray(data) ? data : (data.recettes || [data]);
     const parUrl = new Map(recettes.map(r => [r.url || r.nom, r]));
+    const recues = new Set();
     let ajout = 0;
     for (const r of arr) {
       if (!r || !r.nom) continue;
@@ -311,11 +314,14 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       if (r.favori === true) st.favs.add(cle(r));
       delete r.favori;
       parUrl.set(k, r);
+      recues.add(r);
     }
-    recettes = [...parUrl.values()].map(indexer);
-    save(); remplirCategories(); render();
+    recettes = [...parUrl.values()];
+    recues.forEach(indexer);
+    if (!differe) valider();
     return ajout;
   }
+  function valider() { save(); remplirCategories(); render(); }
 
   async function lireFichiers(files) {
     let ajout = 0;
@@ -393,8 +399,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       : "";
     if (!liste.length) html += `<div class="empty">Aucune recette ne correspond aux filtres.</div>`;
 
+    const pos = new Map(recettes.map((r, i) => [r, i]));
     html += liste.map(r => {
-      const i = recettes.indexOf(r);
+      const i = pos.get(r);
       const fav = st.favs.has(cle(r)), pan = st.panier.has(cle(r));
       return `<article class="card" data-i="${i}">
         <div class="img">${r.image ? `<img src="${esc(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : "🍽"}</div>
@@ -556,14 +563,18 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     if (busy || !urls.length) return;
     busy = true; $("impGo").disabled = $("impUrlGo").disabled = true;
     let ok = 0;
-    for (const [i, u] of urls.entries()) {
-      try {
-        const r = await api(`/api/recipe?url=${encodeURIComponent(u)}`);
-        importer([r]); ok++;
-        log(`[${i + 1}/${urls.length}] ✓ ${nettoyerNom(r.nom)}`);
-      } catch (e) { log(`[${i + 1}/${urls.length}] ✗ ${u} → ${e.message}`); }
-    }
-    busy = false; $("impGo").disabled = $("impUrlGo").disabled = false;
+    try {
+      for (const [i, u] of urls.entries()) {
+        try {
+          const r = await api(`/api/recipe?url=${encodeURIComponent(u)}`);
+          importer([r], { differe: true }); ok++;
+          log(`[${i + 1}/${urls.length}] ✓ ${nettoyerNom(r.nom)}`);
+        } catch (e) { log(`[${i + 1}/${urls.length}] ✗ ${u} → ${e.message}`); }
+      }
+    } finally {
+      busy = false;
+      if (ok) valider();                    // une seule sauvegarde + un seul affichage
+    } $("impGo").disabled = $("impUrlGo").disabled = false;
     log(`Terminé : ${ok}/${urls.length} importée(s)`);
     if (ok) log("💾 Sauvegardé automatiquement dans recettes_marmiton.json (dossier du serveur)");
     if (ok) toast(`${pluriel(ok, "recette")} importée(s)`);
