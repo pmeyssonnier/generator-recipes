@@ -131,6 +131,9 @@ python tester_sources.py            # ou : python tester_sources.py quiche
 python -m unittest discover -s tests     # hors ligne : durées, Host, fichiers servis, redirections
 ```
 
+Ces tests et une vérification `pyflakes` tournent automatiquement sur GitHub Actions
+(`.github/workflows/ci.yml`, Python 3.9 et 3.13) à chaque push sur `main` et à chaque pull request.
+
 ## Ajouter un site
 
 - **Import par URL** : ajouter son domaine à `SITES` dans `serveur_recettes.py`. Fonctionne
