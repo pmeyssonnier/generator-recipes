@@ -9,7 +9,7 @@ Lancement :
 Port personnalisé : variable d'environnement RECETTES_PORT (défaut 8765)
 Compatible Windows, Linux, macOS et Android (Termux).
 
-Les recettes importées sont enregistrées dans recettes_marmiton.json,
+Les recettes importées sont enregistrées dans recettes.json,
 dans le même dossier que ce script (même format que le script Colab).
 """
 import gzip, html, ipaddress, json, os, re, shutil, socket, subprocess, sys, threading, time, unicodedata, webbrowser
@@ -24,7 +24,8 @@ LAN = "--lan" in sys.argv          # écoute sur le réseau local (accès depuis
 HOST = "0.0.0.0" if LAN else "127.0.0.1"
 DIR = os.path.dirname(os.path.abspath(__file__))
 NOMS_PAGE = ("generateur-recettes.html", "generateur_recettes.html")
-BASE_FILE = os.path.join(DIR, "recettes_marmiton.json")
+BASE_FILE = os.path.join(DIR, "recettes.json")
+ANCIEN_BASE_FILE = os.path.join(DIR, "recettes_marmiton.json")   # ancien nom, migré au lancement
 BASE = "https://www.marmiton.org"
 PAUSE = 1.5  # secondes minimum entre deux requêtes sortantes
 HEADERS = {
@@ -380,6 +381,19 @@ def search_recipes(q, n=10, source="marmiton"):
 
 
 # ---------------- Base JSON partagée avec Colab ----------------
+def migrer_base(ancien=None, nouveau=None):
+    """Renomme l'ancienne base recettes_marmiton.json en recettes.json (aucune donnée perdue).
+    Renvoie un message à afficher, ou None s'il n'y a rien à faire."""
+    ancien, nouveau = ancien or ANCIEN_BASE_FILE, nouveau or BASE_FILE
+    if not os.path.exists(ancien):
+        return None
+    if os.path.exists(nouveau):
+        return (f"⚠ {os.path.basename(ancien)} et {os.path.basename(nouveau)} existent tous les deux : "
+                f"seul {os.path.basename(nouveau)} est utilisé (fusionne ou supprime l'ancien à la main)")
+    os.replace(ancien, nouveau)
+    return f"Base renommée : {os.path.basename(ancien)} → {os.path.basename(nouveau)}"
+
+
 def lire_base():
     try:
         with open(BASE_FILE, encoding="utf-8") as f:
@@ -622,6 +636,9 @@ if __name__ == "__main__":
     if LAN:
         print(f"   Réseau local     → http://{ip_locale()}:{PORT}/")
         print("   ⚠ Accessible à tout appareil du même Wi-Fi")
+    migration = migrer_base()
+    if migration:
+        print("  ", migration)
     print(f"   Base : {BASE_FILE} ({len(lire_base())} recettes)")
     print("   Ctrl+C pour arrêter")
     ouvrir_navigateur(url)

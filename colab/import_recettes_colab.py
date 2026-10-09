@@ -1,6 +1,6 @@
 # ============================================================
 # Import de recettes via JSON-LD (schema.org/Recipe) — Google Colab
-# Produit recettes_marmiton.json, compatible avec generateur-recettes.html
+# Produit recettes.json, compatible avec generateur-recettes.html
 # ============================================================
 !pip -q install requests beautifulsoup4 pandas
 
@@ -186,7 +186,7 @@ def generer(recettes, avec=(), sans=(), max_min=None, n=3):
 # ============================================================
 recettes = import_recipes("blanquette", max_results=8)
 
-with open("recettes_marmiton.json", "w", encoding="utf-8") as f:
+with open("recettes.json", "w", encoding="utf-8") as f:
     json.dump(recettes, f, ensure_ascii=False, indent=2)
 
 df = pd.DataFrame(recettes)

@@ -219,6 +219,24 @@ class Base(unittest.TestCase):
             self.assertEqual(noms, ["A bis", "B"])
             self.assertFalse(os.path.exists(s.BASE_FILE + ".tmp"))
 
+    def test_migrer_base(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            ancien, nouveau = os.path.join(d, "recettes_marmiton.json"), os.path.join(d, "recettes.json")
+            self.assertIsNone(s.migrer_base(ancien, nouveau))                 # rien à migrer
+            with open(ancien, "w") as h:
+                h.write('[{"nom": "x"}]')
+            self.assertIn("renommée", s.migrer_base(ancien, nouveau))
+            self.assertFalse(os.path.exists(ancien))
+            with open(nouveau) as h:
+                self.assertEqual(json.load(h), [{"nom": "x"}])                # contenu intact
+            with open(ancien, "w") as h:
+                h.write('[{"nom": "y"}]')
+            self.assertIn("tous les deux", s.migrer_base(ancien, nouveau))    # conflit : rien n'est écrasé
+            with open(nouveau) as h:
+                self.assertEqual(json.load(h), [{"nom": "x"}])
+            self.assertTrue(os.path.exists(ancien))
+
     def test_lire_base_absente_ou_corrompue(self):
         import tempfile
         with tempfile.TemporaryDirectory() as d:

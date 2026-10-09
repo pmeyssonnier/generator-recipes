@@ -224,7 +224,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       <button id="expFav">❤️ Favoris uniquement<small id="expFavInfo"></small></button>
     </div>
     <p class="hint" style="margin-top:14px">Le fichier est téléchargé dans <b>Téléchargements</b>.
-      Le serveur garde en plus une copie automatique dans <b>recettes_marmiton.json</b>,
+      Le serveur garde en plus une copie automatique dans <b>recettes.json</b>,
       à côté de <code>serveur_recettes.py</code>.</p>
   </div>
 </dialog>
@@ -390,7 +390,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     if (!recettes.length) {
       grid.innerHTML = `<div class="empty">Aucune recette chargée.<br><br>
         Clique sur <b>🌐 Importer</b> (serveur Python lancé),<br>
-        ou sur <b>📂 Charger JSON</b> / glisse ton fichier <code>recettes_marmiton.json</code> ici.</div>`;
+        ou sur <b>📂 Charger JSON</b> / glisse ton fichier <code>recettes.json</code> ici.</div>`;
       return;
     }
     let html = st.surprise
@@ -496,7 +496,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     try {
       const d = await api("/api/ping");
       s.className = "srv on"; s.textContent = `● serveur (${d.base} en base)`;
-      s.title = `Sauvegarde automatique : ${d.fichier || "recettes_marmiton.json"}`;
+      s.title = `Sauvegarde automatique : ${d.fichier || "recettes.json"}`;
       return d;
     } catch {
       s.className = "srv off"; s.textContent = "● hors ligne";
@@ -576,7 +576,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       if (ok) valider();                    // une seule sauvegarde + un seul affichage
     } $("impGo").disabled = $("impUrlGo").disabled = false;
     log(`Terminé : ${ok}/${urls.length} importée(s)`);
-    if (ok) log("💾 Sauvegardé automatiquement dans recettes_marmiton.json (dossier du serveur)");
+    if (ok) log("💾 Sauvegardé automatiquement dans recettes.json (dossier du serveur)");
     if (ok) toast(`${pluriel(ok, "recette")} importée(s)`);
     ping();
   }
@@ -667,7 +667,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   });
   $("btnClear").addEventListener("click", () => {
     if (!confirm("Vider la base de recettes du navigateur (favoris et panier compris) ?\n" +
-                 "Le fichier recettes_marmiton.json du serveur n'est pas touché.")) return;
+                 "Le fichier recettes.json du serveur n'est pas touché.")) return;
     recettes = []; st.panier.clear(); st.favs.clear(); save(); remplirCategories(); render();
   });
 
