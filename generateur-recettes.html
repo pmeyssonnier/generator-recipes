@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https: http:; connect-src 'self' http://localhost:8765; base-uri 'none'; form-action 'none'">
 <title>Générateur de recettes</title>
 <style>
 :root{
@@ -51,8 +52,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);
   display:flex;flex-direction:column;cursor:pointer;transition:transform .12s}
 .card:hover{transform:translateY(-2px)}
-.card .img{aspect-ratio:4/3;background:var(--accent-soft) center/cover no-repeat;display:flex;align-items:center;
-  justify-content:center;font-size:2.5rem}
+.card .img{aspect-ratio:4/3;background:var(--accent-soft);display:flex;align-items:center;
+  justify-content:center;font-size:2.5rem;overflow:hidden}
+.card .img img{width:100%;height:100%;object-fit:cover;display:block}
 .card .body{padding:12px;display:flex;flex-direction:column;gap:6px;flex:1}
 .card h3{margin:0;font-size:1rem;line-height:1.3}
 .meta{display:flex;flex-wrap:wrap;gap:10px;font-size:.82rem;color:var(--muted)}
@@ -259,15 +261,21 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const esc = s => String(s ?? "").replace(/[&<>"']/g,
     c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
   const num = v => { const n = parseFloat(String(v ?? "").replace(",", ".")); return isNaN(n) ? null : n; };
-  const total = r => r.total_min ?? (((r.prep_min || 0) + (r.cuisson_min || 0)) || null);
+  const total = r => r.total_min || (((r.prep_min || 0) + (r.cuisson_min || 0)) || null);
+  // Seules les URL http(s) sont acceptées (un JSON importé pourrait contenir « javascript: »)
+  const urlSure = u => /^https?:\/\//i.test(String(u ?? "").trim()) ? String(u).trim() : "";
   const fmtMin = m => m == null ? "?" : m >= 60 ? `${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")}` : `${m} min`;
   const catOf = r => Array.isArray(r.categorie) ? r.categorie.join(", ") : (r.categorie || "");
   const nettoyerNom = s => String(s || "").replace(/ /g, " ")
     .replace(/\s*:\s*la meilleure recette\s*$/i, "").trim();
+  // Clé des favoris / panier : l'URL, ou le nom pour une recette sans URL
+  const cle = r => r.url || ("nom:" + nettoyerNom(r.nom));
   const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
   function indexer(r) {
     r.nom = nettoyerNom(r.nom);
+    r.url = urlSure(r.url);
+    r.image = urlSure(r.image);
     if (!r.source && r.url) { try { r.source = new URL(r.url).hostname.replace(/^www\./, ""); } catch {} }
     r._ing = norm((r.ingredients || []).join(" | "));
     r._txt = norm([r.nom, catOf(r), r.cuisine, r.mots_cles, r.source].flat().join(" "));
@@ -293,9 +301,10 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     let ajout = 0;
     for (const r of arr) {
       if (!r || !r.nom) continue;
+      r.url = urlSure(r.url);
       const k = r.url || r.nom;
       if (!parUrl.has(k)) ajout++;
-      if (r.favori === true && r.url) st.favs.add(r.url);
+      if (r.favori === true) st.favs.add(cle(r));
       delete r.favori;
       parUrl.set(k, r);
     }
@@ -316,7 +325,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // ---------- Export JSON ----------
   function telecharger(liste, suffixe) {
     if (!liste.length) { toast("Rien à exporter"); return; }
-    const propre = liste.map(r => ({ ...sansIndex(r), favori: st.favs.has(r.url) }));
+    const propre = liste.map(r => ({ ...sansIndex(r), favori: st.favs.has(cle(r)) }));
     const blob = new Blob([JSON.stringify(propre, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -329,7 +338,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   function ouvrirExport() {
     if (!recettes.length) { toast("Aucune recette à exporter"); return; }
     const affichees = st.surprise || filtrer();
-    const favs = recettes.filter(r => st.favs.has(r.url));
+    const favs = recettes.filter(r => st.favs.has(cle(r)));
     $("expToutInfo").textContent = pluriel(recettes.length, "recette");
     $("expFiltreInfo").textContent = pluriel(affichees.length, "recette");
     $("expFavInfo").textContent = pluriel(favs.length, "recette");
@@ -348,7 +357,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       if (st.tmax && (r._tps == null || r._tps > st.tmax)) return false;
       if (st.nmin && (r._note ?? 0) < st.nmin) return false;
       if (st.cat && catOf(r) !== st.cat) return false;
-      if (st.favOnly && !st.favs.has(r.url)) return false;
+      if (st.favOnly && !st.favs.has(cle(r))) return false;
       return true;
     });
     const tris = {
@@ -382,9 +391,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 
     html += liste.map(r => {
       const i = recettes.indexOf(r);
-      const fav = st.favs.has(r.url), pan = st.panier.has(r.url);
+      const fav = st.favs.has(cle(r)), pan = st.panier.has(cle(r));
       return `<article class="card" data-i="${i}">
-        <div class="img" ${r.image ? `style="background-image:url('${esc(r.image)}')"` : ""}>${r.image ? "" : "🍽"}</div>
+        <div class="img">${r.image ? `<img src="${esc(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : "🍽"}</div>
         <div class="body">
           <h3>${esc(r.nom)}</h3>
           <div class="meta">
@@ -439,16 +448,17 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     $("dlgRecette").showModal();
   }
   function majBoutonPanier() {
-    $("dPanier").textContent = st.panier.has(courante.url) ? "✓ Dans les courses" : "🛒 Ajouter aux courses";
+    $("dPanier").textContent = st.panier.has(cle(courante)) ? "✓ Dans les courses" : "🛒 Ajouter aux courses";
   }
 
   // ---------- Panier ----------
   function togglePanier(r) {
-    st.panier.has(r.url) ? st.panier.delete(r.url) : st.panier.add(r.url);
+    const k = cle(r);
+    st.panier.has(k) ? st.panier.delete(k) : st.panier.add(k);
     save(); render();
   }
   function listeCourses() {
-    const sel = recettes.filter(r => st.panier.has(r.url));
+    const sel = recettes.filter(r => st.panier.has(cle(r)));
     if (!sel.length) return "Panier vide — ajoute des recettes avec 🛒.";
     return sel.map(r =>
       `== ${r.nom} (${r.portions || "?"}) ==\n` + (r.ingredients || []).map(x => `☐ ${x}`).join("\n")
@@ -614,7 +624,8 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     const fav = e.target.closest("[data-fav]"), pan = e.target.closest("[data-pan]");
     if (fav) {
       const r = recettes[+fav.dataset.fav];
-      st.favs.has(r.url) ? st.favs.delete(r.url) : st.favs.add(r.url);
+      const k = cle(r);
+      st.favs.has(k) ? st.favs.delete(k) : st.favs.add(k);
       save(); return render();
     }
     if (pan) return togglePanier(recettes[+pan.dataset.pan]);
@@ -640,7 +651,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   $("btnExport").addEventListener("click", ouvrirExport);
   $("expTout").addEventListener("click", () => telecharger(recettes, "base"));
   $("expFiltre").addEventListener("click", () => telecharger(st.surprise || filtrer(), "selection"));
-  $("expFav").addEventListener("click", () => telecharger(recettes.filter(r => st.favs.has(r.url)), "favoris"));
+  $("expFav").addEventListener("click", () => telecharger(recettes.filter(r => st.favs.has(cle(r))), "favoris"));
 
   // Liste des sources de recherche fournie par le serveur
   let sources = [];

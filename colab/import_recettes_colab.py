@@ -37,11 +37,11 @@ def iso_duration_to_min(d):
     """PT1H30M -> 90 ; None si absent."""
     if not d or not isinstance(d, str):
         return None
-    m = re.match(r"P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?", d)
+    m = re.fullmatch(r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:\d+(?:[.,]\d+)?S)?)?", d.strip().upper())
     if not m:
         return None
     j, h, mi = (int(x) if x else 0 for x in m.groups())
-    return j * 1440 + h * 60 + mi
+    return (j * 1440 + h * 60 + mi) or None      # PT0S : durée inconnue, pas « 0 minute »
 
 
 def find_recipe_obj(data):

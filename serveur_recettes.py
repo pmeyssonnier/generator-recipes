@@ -12,11 +12,11 @@ Compatible Windows, Linux, macOS et Android (Termux).
 Les recettes importées sont enregistrées dans recettes_marmiton.json,
 dans le même dossier que ce script (même format que le script Colab).
 """
-import gzip, html, json, os, re, shutil, socket, subprocess, sys, threading, time, unicodedata, webbrowser
-from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+import gzip, html, ipaddress, json, os, re, shutil, socket, subprocess, sys, threading, time, unicodedata, webbrowser
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 from urllib.robotparser import RobotFileParser
 
 PORT = int(os.environ.get("RECETTES_PORT", 8765))
@@ -50,6 +50,12 @@ SITES = {
 #  sandboxées de n'importe quel site envoient aussi Origin: null).
 ORIGINES = {"https://pmeyssonnier.github.io"}
 ORIGINES |= {o.strip().rstrip("/") for o in os.environ.get("RECETTES_ORIGINES", "").split(",") if o.strip()}
+
+# Noms d'hôte acceptés dans l'en-tête Host (protège du DNS rebinding : un site pirate dont le
+# nom pointe vers 127.0.0.1 enverrait un Host inconnu). Les adresses IP locales sont acceptées
+# (loopback ; + réseau privé avec --lan). Autres noms : RECETTES_HOTES="monpc.local,autre"
+HOTES = {"localhost"}
+HOTES |= {h.strip().lower() for h in os.environ.get("RECETTES_HOTES", "").split(",") if h.strip()}
 
 _net_lock = threading.Lock()
 _file_lock = threading.Lock()
@@ -98,23 +104,47 @@ def robots_autorise(url):
     return rp.can_fetch("*", url)
 
 
-def telecharger(url, timeout=20):
-    """Téléchargement brut (octets, charset), avec robots.txt et pause entre requêtes."""
+class _SansRedirection(HTTPRedirectHandler):
+    """Les redirections sont suivies à la main (voir telecharger) pour être revalidées."""
+    def redirect_request(self, *a, **k):
+        return None
+
+
+_opener = build_opener(_SansRedirection)
+MAX_SAUTS = 5
+REDIRECTIONS = (301, 302, 303, 307, 308)
+
+
+def telecharger(url, timeout=20, _sauts=0):
+    """Téléchargement brut (octets, charset), avec robots.txt et pause entre requêtes.
+    Chaque redirection est revalidée (site autorisé, pas de retour en http, robots.txt)."""
     if not url.endswith("/robots.txt") and not robots_autorise(url):
         raise AccesInterdit(f"{domaine(url)} n'autorise pas l'accès automatisé à cette page (robots.txt)")
+    cible = None
     with _net_lock:
         wait = PAUSE - (time.time() - _last[0])
         if wait > 0:
             time.sleep(wait)
         try:
-            with urlopen(Request(url, headers=HEADERS), timeout=timeout) as r:
+            with _opener.open(Request(url, headers=HEADERS), timeout=timeout) as r:
                 data = r.read()
                 if r.headers.get("Content-Encoding") == "gzip":
                     data = gzip.decompress(data)
                 charset = r.headers.get_content_charset() or "utf-8"
+        except HTTPError as e:
+            if e.code not in REDIRECTIONS or not e.headers.get("Location"):
+                raise
+            cible = urljoin(url, e.headers["Location"])
         finally:
             _last[0] = time.time()
-    return data, charset
+    if cible is None:
+        return data, charset
+    # (hors verrou : robots_autorise() retélécharge via ce même verrou)
+    if _sauts >= MAX_SAUTS:
+        raise AccesInterdit("Trop de redirections")
+    if not url_autorisee(cible) or (url.startswith("https:") and not cible.startswith("https:")):
+        raise AccesInterdit(f"Redirection refusée vers {cible[:120]}")
+    return telecharger(cible, timeout, _sauts + 1)
 
 
 def fetch(url):
@@ -193,11 +223,11 @@ def nettoyer_nom(nom):
 def iso_duration_to_min(d):
     if not d or not isinstance(d, str):
         return None
-    m = re.match(r"P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?", d)
+    m = re.fullmatch(r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:\d+(?:[.,]\d+)?S)?)?", d.strip().upper())
     if not m:
         return None
     j, h, mi = (int(x) if x else 0 for x in m.groups())
-    return j * 1440 + h * 60 + mi
+    return (j * 1440 + h * 60 + mi) or None      # PT0S, PT45S… : durée inconnue, pas « 0 minute »
 
 
 def find_recipe_obj(data):
@@ -430,16 +460,42 @@ def ajouter_base(rec):
 
 
 # ---------------- HTTP ----------------
-class Handler(SimpleHTTPRequestHandler):
-    def __init__(self, *a, **k):
-        super().__init__(*a, directory=DIR, **k)
+class ParametreInvalide(ValueError):
+    """Paramètre de requête mal formé (→ HTTP 400)."""
+
+
+def entier(valeur, defaut, mini, maxi):
+    if valeur in (None, ""):
+        return defaut
+    try:
+        return max(mini, min(int(valeur), maxi))
+    except ValueError:
+        raise ParametreInvalide(f"Paramètre n invalide : {valeur[:20]!r}") from None
+
+
+def hote_ok(host):
+    """Valide l'en-tête Host (anti DNS rebinding) : localhost, adresse IP locale, ou RECETTES_HOTES."""
+    h = (host or "").strip().lower()
+    h = h[1:h.index("]")] if h.startswith("[") and "]" in h else h.rsplit(":", 1)[0] if h.count(":") == 1 else h
+    if h in HOTES:
+        return True
+    try:
+        ip = ipaddress.ip_address(h)
+    except ValueError:
+        return False                     # tout autre nom de domaine : refusé
+    return ip.is_loopback or (LAN and ip.is_private)
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "Recettes"
+    sys_version = ""
 
     # ---- Contrôle d'origine ----
     def origine_ok(self, origin):
         """Origine autorisée : liste ORIGINES, ou la page servie par ce serveur lui-même."""
         if origin in ORIGINES:
             return True
-        host = self.headers.get("Host", "")
+        host = self.headers.get("Host", "")      # déjà validé par hote_ok() dans do_GET
         return bool(host) and origin in (f"http://{host}", f"https://{host}")
 
     def refus_origine(self):
@@ -463,7 +519,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         """Pré-vol CORS (page GitHub Pages → localhost) : accepté seulement pour une origine autorisée."""
         origin = self.headers.get("Origin")
-        if not (origin and self.origine_ok(origin)):
+        if not (hote_ok(self.headers.get("Host")) and origin and self.origine_ok(origin)):
             self.send_response(403)
             self.send_header("Content-Length", "0")
             self.end_headers()
@@ -495,9 +551,16 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_HEAD(self):
+        self.send_json({"erreur": "Méthode non prise en charge"}, 405)
+
     def do_GET(self):
+        if not hote_ok(self.headers.get("Host")):
+            print("   ⛔", self.client_address[0], "Host refusé :", self.headers.get("Host"))
+            return self.send_json({"erreur": "Hôte non autorisé"}, 403)
         u = urlparse(self.path)
-        if u.path in ("/", "/index.html"):
+        # Seule la page du générateur est servie (ni .git, ni code source, ni base JSON)
+        if u.path in ("/", "/index.html") or u.path.lstrip("/") in NOMS_PAGE:
             page = trouver_page()
             if not page:
                 fichiers = "\n".join(sorted(os.listdir(DIR))) or "(dossier vide)"
@@ -507,10 +570,18 @@ class Handler(SimpleHTTPRequestHandler):
                     f"<p>Dossier du serveur : <code>{html.escape(DIR)}</code></p>"
                     f"<p>Contenu :</p><pre>{html.escape(fichiers)}</pre>"
                     "<p>Place <b>generateur-recettes.html</b> dans ce dossier puis recharge.</p>", 404)
-            self.path = "/" + page
-            return super().do_GET()
+            with open(os.path.join(DIR, page), "rb") as f:
+                body = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if not u.path.startswith("/api/"):
-            return super().do_GET()
+            return self.send_json({"erreur": "Introuvable"}, 404)
 
         refus = self.refus_origine()
         if refus:
@@ -533,7 +604,7 @@ class Handler(SimpleHTTPRequestHandler):
                 q = qs.get("q", "").strip()
                 if not q:
                     return self.send_json({"erreur": "Paramètre q manquant"}, 400)
-                n = max(1, min(int(qs.get("n", 10)), 50))
+                n = entier(qs.get("n"), 10, 1, 50)
                 source = qs.get("source", "marmiton")
                 if source not in SOURCES:
                     return self.send_json({"erreur": f"Source inconnue : {source}"}, 400)
@@ -543,7 +614,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not url_autorisee(url):
                     return self.send_json({"erreur": f"Site non autorisé : {domaine(url)} "
                                                      "(ajoute-le dans SITES de serveur_recettes.py)"}, 400)
-                n = max(1, min(int(qs.get("n", 100)), 200))
+                n = entier(qs.get("n"), 100, 1, 200)
                 return self.send_json(lister_page(url, n))
             if u.path == "/api/recipe":
                 url = qs.get("url", "").strip()
@@ -554,12 +625,16 @@ class Handler(SimpleHTTPRequestHandler):
                 ajouter_base(rec)
                 return self.send_json(rec)
             return self.send_json({"erreur": "Route inconnue"}, 404)
+        except ParametreInvalide as e:
+            self.send_json({"erreur": str(e)}, 400)
         except AccesInterdit as e:
             self.send_json({"erreur": str(e)}, 403)
         except HTTPError as e:
             self.send_json({"erreur": f"Le site a répondu HTTP {e.code}"}, 502)
         except URLError as e:
             self.send_json({"erreur": f"Réseau : {e.reason}"}, 502)
+        except TimeoutError:
+            self.send_json({"erreur": "Le site met trop de temps à répondre"}, 504)
         except Exception as e:
             self.send_json({"erreur": str(e)}, 500)
 
