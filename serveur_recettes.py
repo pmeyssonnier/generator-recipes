@@ -98,9 +98,8 @@ def robots_autorise(url):
     return rp.can_fetch("*", url)
 
 
-def fetch(url):
-    if url in _cache:
-        return _cache[url]
+def telecharger(url, timeout=20):
+    """Téléchargement brut (octets, charset), avec robots.txt et pause entre requêtes."""
     if not url.endswith("/robots.txt") and not robots_autorise(url):
         raise AccesInterdit(f"{domaine(url)} n'autorise pas l'accès automatisé à cette page (robots.txt)")
     with _net_lock:
@@ -108,16 +107,58 @@ def fetch(url):
         if wait > 0:
             time.sleep(wait)
         try:
-            with urlopen(Request(url, headers=HEADERS), timeout=20) as r:
+            with urlopen(Request(url, headers=HEADERS), timeout=timeout) as r:
                 data = r.read()
                 if r.headers.get("Content-Encoding") == "gzip":
                     data = gzip.decompress(data)
                 charset = r.headers.get_content_charset() or "utf-8"
         finally:
             _last[0] = time.time()
+    return data, charset
+
+
+def fetch(url):
+    if url in _cache:
+        return _cache[url]
+    data, charset = telecharger(url)
     txt = data.decode(charset, errors="replace")
     _cache[url] = txt
     return txt
+
+
+# ---------------- Plans de site (sitemap.xml) ----------------
+LOC_RE = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.IGNORECASE)
+_sitemaps = {}
+
+
+def urls_sitemap(racine, garder_enfant=lambda u: True, max_enfants=40):
+    """Toutes les URL d'un plan de site (suit un index de plans, gère le .gz).
+    Mis en cache pour la durée de vie du serveur."""
+    if racine in _sitemaps:
+        return _sitemaps[racine]
+
+    def lire(u):
+        data, charset = telecharger(u, timeout=60)
+        if data[:2] == b"\x1f\x8b":                 # fichier .xml.gz
+            data = gzip.decompress(data)
+        return data.decode("utf-8", errors="replace")
+
+    print(f"   Lecture du plan du site {domaine(racine)} (première recherche, peut prendre un moment)…")
+    xml = lire(racine)
+    locs = [html.unescape(x) for x in LOC_RE.findall(xml)]
+    if "<sitemapindex" in xml.lower():
+        enfants = [u for u in locs if garder_enfant(u)] or locs
+        urls = []
+        for u in enfants[:max_enfants]:
+            try:
+                urls += [html.unescape(x) for x in LOC_RE.findall(lire(u))]
+            except (HTTPError, URLError, AccesInterdit):
+                continue
+    else:
+        urls = locs
+    _sitemaps[racine] = urls
+    print(f"   {len(urls)} URL dans le plan du site {domaine(racine)}")
+    return urls
 
 
 def domaine(url):
@@ -289,6 +330,43 @@ def recherche_ptitchef(q, n=10):
                           titre, n)
 
 
+MOTS_VIDES = {"de", "du", "des", "la", "le", "les", "l", "d", "a", "au", "aux", "et", "en", "un", "une"}
+
+
+def mots_cles(q):
+    """« Lasagnes aux épinards » → ["lasagne", "epinard"] (sans accents, mots vides,
+    ni pluriel en s/x, pour une correspondance par préfixe)."""
+    out = []
+    for m in slugifier(q).split("-"):
+        if not m or m in MOTS_VIDES:
+            continue
+        if len(m) > 3 and m.endswith(("s", "x")):
+            m = m[:-1]
+        out.append(m)
+    return out
+
+
+def recherche_ricardo(q, n=10):
+    """Ricardo : la recherche du site passe par son API, interdite aux robots.
+    On cherche donc dans les noms de recettes de son plan de site public (sitemap.xml)."""
+    urls = urls_sitemap("https://www.ricardocuisine.com/sitemap.xml",
+                        lambda u: "recette" in u.lower() or "recipe" in u.lower())
+    motif = re.compile(r"^https://www\.ricardocuisine\.com/recettes/\d+-([a-z0-9-]+)/?$")
+    mots = mots_cles(q)
+    if not mots:
+        return []
+    trouves = []
+    for u in urls:
+        m = motif.match(u)
+        if not m:
+            continue
+        mots_slug = m.group(1).split("-")
+        if all(any(ms.startswith(x) for ms in mots_slug) for x in mots):
+            trouves.append((len(mots_slug), u.rstrip("/")))
+    trouves.sort()                                   # noms courts (plus précis) d'abord
+    return [{"url": u, "titre": titre_generique(u)} for _, u in trouves[:n]]
+
+
 # ---------------- Pages de sélection (liste de recettes) ----------------
 # Format des URL de recettes par site, pour extraire les recettes d'une page
 # qui en liste plusieurs (chronique Ricardo, page thématique PtitChef, catégorie…).
@@ -334,6 +412,8 @@ SOURCES = {
                  "aide": "Recherche libre (ex. blanquette, curry de légumes)"},
     "ptitchef": {"nom": "PtitChef", "chercher": recherche_ptitchef,
                  "aide": "Pages thématiques : un plat ou un ingrédient (ex. lasagnes, quiche, tiramisu)"},
+    "ricardo": {"nom": "Ricardo", "chercher": recherche_ricardo,
+                "aide": "Mots du nom de la recette (ex. lasagne, poulet curry). 1re recherche plus lente"},
 }
 
 
