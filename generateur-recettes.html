@@ -65,6 +65,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .card .foot{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:6px}
 .icon-btn{border:none;background:none;font-size:1.2rem;padding:2px 6px;cursor:pointer}
 .icon-btn.off{filter:grayscale(1);opacity:.45}
+.plus{grid-column:1/-1;text-align:center;padding:8px 0 24px}
+.plus .meta{justify-content:center;margin-bottom:8px}
 .empty{grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--muted);border:2px dashed var(--line);border-radius:12px}
 .banner{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;
   background:var(--accent-soft);padding:10px 14px;border-radius:10px}
@@ -236,9 +238,10 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const $ = id => document.getElementById(id);
 
   // ---------- État ----------
+  const PAGE = 48;                           // cartes affichées par « page » (bouton « Afficher plus »)
   let recettes = [];
   const st = { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", tri:"note", favOnly:false,
-               surprise:null, panier:new Set(), favs:new Set() };
+               surprise:null, visibles:PAGE, panier:new Set(), favs:new Set() };
 
   // ---------- Stockage local ----------
   const sansIndex = ({ _ing, _txt, _note, _avis, _tps, ...r }) => r;
@@ -384,6 +387,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   function render() {
     const grid = $("grid");
     const liste = st.surprise || filtrer();
+    const vues = st.surprise ? liste : liste.slice(0, st.visibles);       // pagination
     $("count").textContent = `${liste.length} / ${pluriel(recettes.length, "recette")}`;
     $("nbPanier").textContent = st.panier.size;
 
@@ -400,7 +404,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     if (!liste.length) html += `<div class="empty">Aucune recette ne correspond aux filtres.</div>`;
 
     const pos = new Map(recettes.map((r, i) => [r, i]));
-    html += liste.map(r => {
+    html += vues.map(r => {
       const i = pos.get(r);
       const fav = st.favs.has(cle(r)), pan = st.panier.has(cle(r));
       return `<article class="card" data-i="${i}">
@@ -422,6 +426,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
           </div>
         </div></article>`;
     }).join("");
+    if (vues.length < liste.length) {
+      const reste = liste.length - vues.length;
+      html += `<div class="plus"><div class="meta">${vues.length} sur ${liste.length} affichées</div>
+        <button id="plus">Afficher ${Math.min(PAGE, reste)} de plus${reste > PAGE ? ` (${reste} restantes)` : ""}</button></div>`;
+    }
     grid.innerHTML = html;
   }
 
@@ -591,7 +600,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     if (e.dataTransfer.files.length) lireFichiers(e.dataTransfer.files);
   });
 
-  const filtreChange = () => { st.surprise = null; render(); };
+  const filtreChange = () => { st.surprise = null; st.visibles = PAGE; render(); };
   $("q").addEventListener("input", e => { st.q = e.target.value; filtreChange(); });
   $("tmax").addEventListener("input", e => {
     st.tmax = +e.target.value;
@@ -628,7 +637,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   $("btnSurprise").addEventListener("click", surprise);
 
   $("btnReset").addEventListener("click", () => {
-    Object.assign(st, { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", tri:"note", favOnly:false, surprise:null });
+    Object.assign(st, { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", tri:"note", favOnly:false, surprise:null, visibles:PAGE });
     $("q").value = ""; $("tmax").value = 0; $("tmaxVal").textContent = "illimité";
     $("nmin").value = "0"; $("cat").value = ""; $("tri").value = "note"; $("favOnly").checked = false;
     renderChips(); render();
@@ -639,7 +648,12 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 
   $("grid").addEventListener("click", e => {
     if (e.target.id === "reroll") return surprise();
-    if (e.target.id === "voirTout") { st.surprise = null; return render(); }
+    if (e.target.id === "voirTout") { st.surprise = null; st.visibles = PAGE; return render(); }
+    if (e.target.id === "plus") {
+      const avant = $("grid").querySelectorAll(".card").length;
+      st.visibles += PAGE; render();
+      return $("grid").querySelectorAll(".card-link")[avant]?.focus();   // le clavier reprend sur la 1re nouvelle carte
+    }
     const fav = e.target.closest("[data-fav]"), pan = e.target.closest("[data-pan]");
     if (fav) {
       const r = recettes[+fav.dataset.fav];
