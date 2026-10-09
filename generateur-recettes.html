@@ -605,7 +605,12 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 
   $("btnImport").addEventListener("click", async () => {
     $("dlgImport").showModal();
-    if (!await ping()) log("⚠ Serveur local injoignable. Lance : python serveur_recettes.py");
+    if (!await ping()) {
+      log("⚠ Serveur local injoignable. Lance : python serveur_recettes.py");
+      if (location.protocol === "file:")
+        log("ℹ Page ouverte comme fichier : utilise plutôt http://localhost:8765 " +
+            "(ou lance le serveur avec RECETTES_ORIGINES=null)");
+    }
     $("impQ").focus();
   });
   $("impSearch").addEventListener("click", rechercher);

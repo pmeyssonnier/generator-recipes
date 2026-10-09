@@ -34,9 +34,18 @@ Le navigateur s'ouvre sur <http://localhost:8765>.
 | `--lan` | Accès depuis un autre appareil du même Wi-Fi (l'adresse s'affiche au lancement) |
 | `--no-browser` | N'ouvre pas le navigateur |
 | `RECETTES_PORT=8766` | Change le port |
+| `RECETTES_ORIGINES=https://a.org,null` | Autorise d'autres sites à appeler l'API (`null` = page ouverte en `file://`) |
 
 Sans serveur, `generateur-recettes.html` s'ouvre aussi en double-clic pour consulter
-une base chargée via **📂 Charger JSON** (l'import en ligne demande le serveur).
+une base chargée via **📂 Charger JSON**. Pour importer depuis une page ouverte en
+`file://`, ouvre plutôt <http://localhost:8765> (ou ajoute `null` à `RECETTES_ORIGINES`).
+
+### Sécurité du serveur local
+
+L'API n'accepte que la page servie par le serveur lui-même et
+`https://pmeyssonnier.github.io`. Les appels venant d'autres sites ouverts dans le
+navigateur sont refusés (403), y compris les requêtes déguisées en image ou lien.
+L'import par URL est limité aux domaines de la liste `SITES`.
 
 ### Version en ligne (GitHub Pages)
 
