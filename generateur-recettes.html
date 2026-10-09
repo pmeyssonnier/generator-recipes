@@ -185,7 +185,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 <dialog id="dlgImport">
   <div class="dlg-head"><h2>🌐 Importer des recettes</h2><button class="icon-btn" data-close>✕</button></div>
   <div class="dlg-body">
-    <h4>Recherche sur Marmiton</h4>
+    <h4>Recherche</h4>
+    <div class="inline" style="margin-bottom:8px">
+      <select id="impSrc" style="width:auto"><option value="marmiton">Marmiton</option></select>
+      <span class="hint" id="impSrcAide" style="margin:0"></span>
+    </div>
     <div class="inline">
       <input type="text" id="impQ" placeholder="ex. blanquette, curry de légumes…">
       <input type="number" id="impN" value="10" min="1" max="50" title="Nombre max de résultats">
@@ -196,9 +200,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       <button id="impAll">Tout cocher / décocher</button>
       <button class="primary" id="impGo">⬇ Importer la sélection</button>
     </div>
-    <h4>Ou une URL de recette</h4>
+    <h4>Ou une URL : recette, ou page qui en liste plusieurs</h4>
     <div class="inline">
-      <input type="text" id="impUrl" placeholder="URL d'une recette (Marmiton, 750g, Cuisine AZ, Ricardo…)">
+      <input type="text" id="impUrl" placeholder="Recette ou sélection (Marmiton, Ricardo, PtitChef, Cuisine AZ…)">
       <button id="impUrlGo">Importer</button>
     </div>
     <div class="log" id="impLog"></div>
@@ -483,19 +487,54 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   async function rechercher() {
     const q = $("impQ").value.trim(); if (!q) return;
     const n = +$("impN").value || 10;
-    $("impRes").innerHTML = ""; log(`🔎 Recherche « ${q} »…`);
+    const src = $("impSrc").value;
+    const nomSrc = $("impSrc").selectedOptions[0]?.textContent || src;
+    $("impRes").innerHTML = ""; log(`🔎 Recherche « ${q} » sur ${nomSrc}…`);
     $("impSearch").disabled = true;
     try {
-      const res = await api(`/api/search?q=${encodeURIComponent(q)}&n=${n}`);
-      const connues = new Set(recettes.map(r => r.url));
-      $("impRes").innerHTML = res.length ? res.map(x => {
-        const deja = connues.has(x.url);
-        return `<li><label><input type="checkbox" value="${esc(x.url)}" ${deja ? "" : "checked"}>
-          <span>${esc(x.titre)}${deja ? ' <i class="meta">(déjà en base)</i>' : ""}</span></label></li>`;
-      }).join("") : "<li><i>Aucun résultat</i></li>";
+      const res = await api(`/api/search?source=${encodeURIComponent(src)}&q=${encodeURIComponent(q)}&n=${n}`);
+      afficherResultats(res);
       log(`${res.length} résultat(s)`);
     } catch (e) { log("✗ " + e.message); }
     $("impSearch").disabled = false;
+  }
+
+  function afficherResultats(res) {
+    const connues = new Set(recettes.map(r => r.url));
+    $("impRes").innerHTML = res.length ? res.map(x => {
+      const deja = connues.has(x.url);
+      return `<li><label><input type="checkbox" value="${esc(x.url)}" ${deja ? "" : "checked"}>
+        <span>${esc(x.titre)}${deja ? ' <i class="meta">(déjà en base)</i>' : ""}</span></label></li>`;
+    }).join("") : "<li><i>Aucun résultat</i></li>";
+  }
+
+  // URL saisie : une recette est importée directement ; une page de sélection
+  // (chronique, page thématique…) affiche ses recettes à cocher.
+  async function importerOuLister(u) {
+    if (busy || !u) return;
+    busy = true; $("impUrlGo").disabled = true;
+    log(`🔗 ${u}`);
+    let liste = false;
+    try {
+      const r = await api(`/api/recipe?url=${encodeURIComponent(u)}`);
+      importer([r]);
+      log(`✓ ${nettoyerNom(r.nom)}`);
+      toast("1 recette importée");
+      ping();
+    } catch (e) {
+      if (/Pas de données Recipe/.test(e.message)) liste = true;
+      else log("✗ " + e.message);
+    }
+    if (liste) {
+      log("ℹ Pas une recette : lecture des recettes listées sur cette page…");
+      try {
+        const res = await api(`/api/liste?url=${encodeURIComponent(u)}`);
+        afficherResultats(res);
+        log(res.length ? `${res.length} recette(s) trouvée(s) : coche puis « Importer la sélection »`
+                       : "Aucune recette reconnue sur cette page");
+      } catch (e) { log("✗ " + e.message); }
+    }
+    busy = false; $("impUrlGo").disabled = false;
   }
 
   async function importerUrls(urls) {
@@ -603,6 +642,23 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   $("expFiltre").addEventListener("click", () => telecharger(st.surprise || filtrer(), "selection"));
   $("expFav").addEventListener("click", () => telecharger(recettes.filter(r => st.favs.has(r.url)), "favoris"));
 
+  // Liste des sources de recherche fournie par le serveur
+  let sources = [];
+  async function chargerSources() {
+    try {
+      sources = await api("/api/sources");
+      const actuelle = $("impSrc").value;
+      $("impSrc").innerHTML = sources.map(s => `<option value="${esc(s.id)}">${esc(s.nom)}</option>`).join("");
+      if (sources.some(s => s.id === actuelle)) $("impSrc").value = actuelle;
+      majAideSource();
+    } catch { /* ancien serveur : Marmiton seul */ }
+  }
+  function majAideSource() {
+    const s = sources.find(x => x.id === $("impSrc").value);
+    $("impSrcAide").textContent = s ? s.aide : "";
+  }
+  $("impSrc").addEventListener("change", majAideSource);
+
   $("btnImport").addEventListener("click", async () => {
     $("dlgImport").showModal();
     if (!await ping()) {
@@ -610,6 +666,8 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       if (location.protocol === "file:")
         log("ℹ Page ouverte comme fichier : utilise plutôt http://localhost:8765 " +
             "(ou lance le serveur avec RECETTES_ORIGINES=null)");
+    } else if (!sources.length) {
+      await chargerSources();
     }
     $("impQ").focus();
   });
@@ -622,11 +680,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   });
   $("impGo").addEventListener("click", () =>
     importerUrls([...$("impRes").querySelectorAll("input:checked")].map(c => c.value)));
-  $("impUrlGo").addEventListener("click", () => {
-    const u = $("impUrl").value.trim(); if (u) importerUrls([u]);
-  });
+  $("impUrlGo").addEventListener("click", () => importerOuLister($("impUrl").value.trim()));
   $("impUrl").addEventListener("keydown", e => {
-    if (e.key === "Enter") { const u = e.target.value.trim(); if (u) importerUrls([u]); }
+    if (e.key === "Enter") importerOuLister(e.target.value.trim());
   });
 
   document.querySelectorAll("[data-close]").forEach(b =>

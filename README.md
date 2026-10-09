@@ -93,10 +93,39 @@ serveur_recettes.py  (127.0.0.1:8765)
 Le serveur est nécessaire parce que les sites de recettes n'autorisent pas les appels
 cross-origin (CORS) depuis une page web.
 
+## Sources
+
+| Site | Recherche par mot-clé | URL d'une recette | URL d'une page de sélection |
+|---|---|---|---|
+| Marmiton | ✅ recherche libre | ✅ | ✅ |
+| PtitChef | ✅ pages thématiques (`lasagnes`, `quiche`…) | ✅ | ✅ |
+| Ricardo | — | ✅ | ✅ (chroniques, collections) |
+| Cuisine AZ, Jamie Oliver, 750g | — | ✅ | ✅ |
+| Autres domaines de `SITES` | — | ✅ | — |
+
+Une **page de sélection** est une page qui liste plusieurs recettes (chronique Ricardo,
+page thématique, catégorie…). Colle son URL dans le champ « URL » de la fenêtre d'import :
+ses recettes s'affichent à cocher, comme pour une recherche. Le format des URL de recettes
+de chaque site est défini dans `MOTIFS_RECETTE`.
+
+Jamie Oliver interdit l'accès automatisé à ses pages de recherche (`robots.txt`).
+La recherche de Ricardo passe par son API, elle aussi interdite aux robots.
+
+Pour vérifier que les sources répondent encore (après une mise à jour d'un site) :
+
+```bash
+python tester_sources.py            # ou : python tester_sources.py quiche
+```
+
 ## Ajouter un site
 
-Ajouter son domaine à `SITES` dans `serveur_recettes.py`. L'import par URL fonctionne
-si le site publie un bloc JSON-LD `Recipe` (cas de la plupart des grands sites).
+- **Import par URL** : ajouter son domaine à `SITES` dans `serveur_recettes.py`. Fonctionne
+  si le site publie un bloc JSON-LD `Recipe` (cas de la plupart des grands sites).
+- **Recherche** : écrire une fonction `chercher(q, n)` qui renvoie `[{"url", "titre"}]`,
+  l'ajouter au dictionnaire `SOURCES`, puis lancer `tester_sources.py`.
+
+Le serveur respecte le `robots.txt` de chaque site : une page interdite aux robots est
+refusée avec un message explicite au lieu d'être téléchargée.
 
 ## Usage responsable
 

@@ -12,11 +12,12 @@ Compatible Windows, Linux, macOS et Android (Termux).
 Les recettes importées sont enregistrées dans recettes_marmiton.json,
 dans le même dossier que ce script (même format que le script Colab).
 """
-import gzip, html, json, os, re, shutil, socket, subprocess, sys, threading, time, webbrowser
+import gzip, html, json, os, re, shutil, socket, subprocess, sys, threading, time, unicodedata, webbrowser
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
 from urllib.request import Request, urlopen
+from urllib.robotparser import RobotFileParser
 
 PORT = int(os.environ.get("RECETTES_PORT", 8765))
 LAN = "--lan" in sys.argv          # écoute sur le réseau local (accès depuis un autre appareil)
@@ -67,9 +68,41 @@ def trouver_page():
 
 
 # ---------------- Réseau ----------------
+class AccesInterdit(Exception):
+    """Le robots.txt du site interdit l'accès automatisé à cette page."""
+
+
+_robots = {}
+_robots_lock = threading.Lock()
+
+
+def robots_autorise(url):
+    """Respecte le robots.txt du site (règles « User-agent: * »), mis en cache par site."""
+    p = urlparse(url)
+    racine = f"{p.scheme}://{p.netloc}"
+    with _robots_lock:
+        rp = _robots.get(racine)
+    if rp is None:
+        rp = RobotFileParser()
+        try:
+            rp.parse(fetch(racine + "/robots.txt").splitlines())
+        except HTTPError as e:
+            if e.code in (401, 403):
+                rp.disallow_all = True      # robots.txt protégé : on s'abstient
+            else:
+                rp.allow_all = True         # pas de robots.txt (404…) : aucune restriction
+        except URLError:
+            rp.allow_all = True             # réseau : la requête suivante échouera d'elle-même
+        with _robots_lock:
+            _robots[racine] = rp
+    return rp.can_fetch("*", url)
+
+
 def fetch(url):
     if url in _cache:
         return _cache[url]
+    if not url.endswith("/robots.txt") and not robots_autorise(url):
+        raise AccesInterdit(f"{domaine(url)} n'autorise pas l'accès automatisé à cette page (robots.txt)")
     with _net_lock:
         wait = PAUSE - (time.time() - _last[0])
         if wait > 0:
@@ -209,18 +242,105 @@ def titre_depuis_slug(url):
     return s[:1].upper() + s[1:]
 
 
-def search_recipes(q, n=10):
-    """Recherche Marmiton (seule source de recherche pour l'instant)."""
-    page = fetch(f"{BASE}/recettes/recherche.aspx?aqt={quote_plus(q)}")
+def slugifier(texte):
+    """« Poulet au curry » → « poulet-au-curry » (sans accents)."""
+    t = unicodedata.normalize("NFD", texte).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", t).strip("-")
+
+
+def extraire_liens(page, base, motif, titre, n):
+    """Liens de recettes uniques trouvés dans une page de résultats."""
     out, seen = [], set()
-    for m in re.finditer(r'href="([^"]*?/recettes/recette_[^"?#]+?\.aspx)', page):
-        full = urljoin(BASE, m.group(1))
+    for m in re.finditer(motif, page):
+        full = urljoin(base, m.group(1))
         if full not in seen:
             seen.add(full)
-            out.append({"url": full, "titre": titre_depuis_slug(full)})
+            out.append({"url": full, "titre": titre(full)})
         if len(out) >= n:
             break
     return out
+
+
+# ---------------- Sources de recherche ----------------
+def recherche_marmiton(q, n=10):
+    page = fetch(f"{BASE}/recettes/recherche.aspx?aqt={quote_plus(q)}")
+    return extraire_liens(page, BASE, r'href="([^"]*?/recettes/recette_[^"?#]+?\.aspx)',
+                          titre_depuis_slug, n)
+
+
+def recherche_ptitchef(q, n=10):
+    """PtitChef n'a pas de recherche libre accessible : on lit la page thématique
+    /recettes/recettes-de-<terme> (ex. lasagnes, quiche, tiramisu)."""
+    base = "https://www.ptitchef.com"
+    try:
+        page = fetch(f"{base}/recettes/recettes-de-{slugifier(q)}")
+    except HTTPError as e:
+        if e.code == 404:
+            return []                       # pas de page thématique pour ce terme
+        raise
+
+    def titre(url):
+        m = re.search(r"/recettes/[^/]+/(.+?)-fid-\d+", url)
+        s = m.group(1).replace("-", " ") if m else url
+        return s[:1].upper() + s[1:]
+
+    return extraire_liens(page, base,
+                          r'href="((?:https://www\.ptitchef\.com)?/recettes/[a-z0-9-]+/[a-z0-9-]+-fid-\d+)"',
+                          titre, n)
+
+
+# ---------------- Pages de sélection (liste de recettes) ----------------
+# Format des URL de recettes par site, pour extraire les recettes d'une page
+# qui en liste plusieurs (chronique Ricardo, page thématique PtitChef, catégorie…).
+MOTIFS_RECETTE = {
+    "marmiton.org": r"/recettes/recette_[^\"?#]+?\.aspx",
+    "ptitchef.com": r"/recettes/[a-z0-9-]+/[a-z0-9-]+-fid-\d+",
+    "ricardocuisine.com": r"/(?:en/)?(?:recettes|recipes)/\d+-[a-z0-9-]+",
+    "cuisineaz.com": r"/recettes/[a-z0-9-]+-\d+\.aspx",
+    "jamieoliver.com": r"/recipes/[a-z0-9-]+/[a-z0-9-]+/",
+    "750g.com": r"/[a-z0-9-]+-r\d+\.htm",
+}
+
+
+def titre_generique(url):
+    """Titre lisible tiré de l'URL : « 6972-dinde-farcie » → « Dinde farcie »."""
+    segments = [x for x in urlparse(url).path.split("/") if x]
+    s = segments[-1] if segments else url
+    s = re.sub(r"\.(aspx|htm|html)$", "", s)
+    s = re.sub(r"^recette_", "", s)
+    s = re.sub(r"(?:-fid)?-\d+$|_\d+$|-r\d+$", "", s)
+    s = re.sub(r"^\d+-", "", s)
+    s = s.replace("-", " ").replace("_", " ").strip()
+    return s[:1].upper() + s[1:]
+
+
+def lister_page(url, n=100):
+    """Recettes listées sur une page de sélection d'un site de la liste SITES."""
+    src = source_de(url)
+    motif = MOTIFS_RECETTE.get(src)
+    if not motif:
+        raise ValueError(f"Lecture des pages de sélection non prise en charge pour {src}")
+    page = fetch(url)
+    p = urlparse(url)
+    rx = r'href="((?:https?://(?:www\.)?' + re.escape(src) + r')?' + motif + r')"'
+    res = extraire_liens(page, f"{p.scheme}://{p.netloc}", rx, titre_generique, n)
+    return [r for r in res if r["url"].rstrip("/") != url.rstrip("/")]
+
+
+# Pour ajouter une source : une fonction chercher(q, n) -> [{"url", "titre"}] et une entrée ici
+# (et son domaine dans SITES pour l'import).
+SOURCES = {
+    "marmiton": {"nom": "Marmiton", "chercher": recherche_marmiton,
+                 "aide": "Recherche libre (ex. blanquette, curry de légumes)"},
+    "ptitchef": {"nom": "PtitChef", "chercher": recherche_ptitchef,
+                 "aide": "Pages thématiques : un plat ou un ingrédient (ex. lasagnes, quiche, tiramisu)"},
+}
+
+
+def search_recipes(q, n=10, source="marmiton"):
+    if source not in SOURCES:
+        raise ValueError(f"Source inconnue : {source}")
+    return SOURCES[source]["chercher"](q, n)
 
 
 # ---------------- Base JSON partagée avec Colab ----------------
@@ -343,12 +463,25 @@ class Handler(SimpleHTTPRequestHandler):
                 for r in base:
                     r["nom"] = nettoyer_nom(r.get("nom"))
                 return self.send_json(base)
+            if u.path == "/api/sources":
+                return self.send_json([{"id": k, "nom": v["nom"], "aide": v["aide"]}
+                                       for k, v in SOURCES.items()])
             if u.path == "/api/search":
                 q = qs.get("q", "").strip()
                 if not q:
                     return self.send_json({"erreur": "Paramètre q manquant"}, 400)
                 n = max(1, min(int(qs.get("n", 10)), 50))
-                return self.send_json(search_recipes(q, n))
+                source = qs.get("source", "marmiton")
+                if source not in SOURCES:
+                    return self.send_json({"erreur": f"Source inconnue : {source}"}, 400)
+                return self.send_json(search_recipes(q, n, source))
+            if u.path == "/api/liste":
+                url = qs.get("url", "").strip()
+                if not url_autorisee(url):
+                    return self.send_json({"erreur": f"Site non autorisé : {domaine(url)} "
+                                                     "(ajoute-le dans SITES de serveur_recettes.py)"}, 400)
+                n = max(1, min(int(qs.get("n", 100)), 200))
+                return self.send_json(lister_page(url, n))
             if u.path == "/api/recipe":
                 url = qs.get("url", "").strip()
                 if not url_autorisee(url):
@@ -358,6 +491,8 @@ class Handler(SimpleHTTPRequestHandler):
                 ajouter_base(rec)
                 return self.send_json(rec)
             return self.send_json({"erreur": "Route inconnue"}, 404)
+        except AccesInterdit as e:
+            self.send_json({"erreur": str(e)}, 403)
         except HTTPError as e:
             self.send_json({"erreur": f"Le site a répondu HTTP {e.code}"}, 502)
         except URLError as e:
