@@ -289,6 +289,44 @@ def recherche_ptitchef(q, n=10):
                           titre, n)
 
 
+# ---------------- Pages de sélection (liste de recettes) ----------------
+# Format des URL de recettes par site, pour extraire les recettes d'une page
+# qui en liste plusieurs (chronique Ricardo, page thématique PtitChef, catégorie…).
+MOTIFS_RECETTE = {
+    "marmiton.org": r"/recettes/recette_[^\"?#]+?\.aspx",
+    "ptitchef.com": r"/recettes/[a-z0-9-]+/[a-z0-9-]+-fid-\d+",
+    "ricardocuisine.com": r"/(?:en/)?(?:recettes|recipes)/\d+-[a-z0-9-]+",
+    "cuisineaz.com": r"/recettes/[a-z0-9-]+-\d+\.aspx",
+    "jamieoliver.com": r"/recipes/[a-z0-9-]+/[a-z0-9-]+/",
+    "750g.com": r"/[a-z0-9-]+-r\d+\.htm",
+}
+
+
+def titre_generique(url):
+    """Titre lisible tiré de l'URL : « 6972-dinde-farcie » → « Dinde farcie »."""
+    segments = [x for x in urlparse(url).path.split("/") if x]
+    s = segments[-1] if segments else url
+    s = re.sub(r"\.(aspx|htm|html)$", "", s)
+    s = re.sub(r"^recette_", "", s)
+    s = re.sub(r"(?:-fid)?-\d+$|_\d+$|-r\d+$", "", s)
+    s = re.sub(r"^\d+-", "", s)
+    s = s.replace("-", " ").replace("_", " ").strip()
+    return s[:1].upper() + s[1:]
+
+
+def lister_page(url, n=100):
+    """Recettes listées sur une page de sélection d'un site de la liste SITES."""
+    src = source_de(url)
+    motif = MOTIFS_RECETTE.get(src)
+    if not motif:
+        raise ValueError(f"Lecture des pages de sélection non prise en charge pour {src}")
+    page = fetch(url)
+    p = urlparse(url)
+    rx = r'href="((?:https?://(?:www\.)?' + re.escape(src) + r')?' + motif + r')"'
+    res = extraire_liens(page, f"{p.scheme}://{p.netloc}", rx, titre_generique, n)
+    return [r for r in res if r["url"].rstrip("/") != url.rstrip("/")]
+
+
 # Pour ajouter une source : une fonction chercher(q, n) -> [{"url", "titre"}] et une entrée ici
 # (et son domaine dans SITES pour l'import).
 SOURCES = {
@@ -437,6 +475,13 @@ class Handler(SimpleHTTPRequestHandler):
                 if source not in SOURCES:
                     return self.send_json({"erreur": f"Source inconnue : {source}"}, 400)
                 return self.send_json(search_recipes(q, n, source))
+            if u.path == "/api/liste":
+                url = qs.get("url", "").strip()
+                if not url_autorisee(url):
+                    return self.send_json({"erreur": f"Site non autorisé : {domaine(url)} "
+                                                     "(ajoute-le dans SITES de serveur_recettes.py)"}, 400)
+                n = max(1, min(int(qs.get("n", 100)), 200))
+                return self.send_json(lister_page(url, n))
             if u.path == "/api/recipe":
                 url = qs.get("url", "").strip()
                 if not url_autorisee(url):

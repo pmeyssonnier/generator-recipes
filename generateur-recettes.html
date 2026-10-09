@@ -200,9 +200,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       <button id="impAll">Tout cocher / décocher</button>
       <button class="primary" id="impGo">⬇ Importer la sélection</button>
     </div>
-    <h4>Ou une URL de recette</h4>
+    <h4>Ou une URL : recette, ou page qui en liste plusieurs</h4>
     <div class="inline">
-      <input type="text" id="impUrl" placeholder="URL d'une recette (Marmiton, 750g, Cuisine AZ, Ricardo…)">
+      <input type="text" id="impUrl" placeholder="Recette ou sélection (Marmiton, Ricardo, PtitChef, Cuisine AZ…)">
       <button id="impUrlGo">Importer</button>
     </div>
     <div class="log" id="impLog"></div>
@@ -493,15 +493,48 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     $("impSearch").disabled = true;
     try {
       const res = await api(`/api/search?source=${encodeURIComponent(src)}&q=${encodeURIComponent(q)}&n=${n}`);
-      const connues = new Set(recettes.map(r => r.url));
-      $("impRes").innerHTML = res.length ? res.map(x => {
-        const deja = connues.has(x.url);
-        return `<li><label><input type="checkbox" value="${esc(x.url)}" ${deja ? "" : "checked"}>
-          <span>${esc(x.titre)}${deja ? ' <i class="meta">(déjà en base)</i>' : ""}</span></label></li>`;
-      }).join("") : "<li><i>Aucun résultat</i></li>";
+      afficherResultats(res);
       log(`${res.length} résultat(s)`);
     } catch (e) { log("✗ " + e.message); }
     $("impSearch").disabled = false;
+  }
+
+  function afficherResultats(res) {
+    const connues = new Set(recettes.map(r => r.url));
+    $("impRes").innerHTML = res.length ? res.map(x => {
+      const deja = connues.has(x.url);
+      return `<li><label><input type="checkbox" value="${esc(x.url)}" ${deja ? "" : "checked"}>
+        <span>${esc(x.titre)}${deja ? ' <i class="meta">(déjà en base)</i>' : ""}</span></label></li>`;
+    }).join("") : "<li><i>Aucun résultat</i></li>";
+  }
+
+  // URL saisie : une recette est importée directement ; une page de sélection
+  // (chronique, page thématique…) affiche ses recettes à cocher.
+  async function importerOuLister(u) {
+    if (busy || !u) return;
+    busy = true; $("impUrlGo").disabled = true;
+    log(`🔗 ${u}`);
+    let liste = false;
+    try {
+      const r = await api(`/api/recipe?url=${encodeURIComponent(u)}`);
+      importer([r]);
+      log(`✓ ${nettoyerNom(r.nom)}`);
+      toast("1 recette importée");
+      ping();
+    } catch (e) {
+      if (/Pas de données Recipe/.test(e.message)) liste = true;
+      else log("✗ " + e.message);
+    }
+    if (liste) {
+      log("ℹ Pas une recette : lecture des recettes listées sur cette page…");
+      try {
+        const res = await api(`/api/liste?url=${encodeURIComponent(u)}`);
+        afficherResultats(res);
+        log(res.length ? `${res.length} recette(s) trouvée(s) : coche puis « Importer la sélection »`
+                       : "Aucune recette reconnue sur cette page");
+      } catch (e) { log("✗ " + e.message); }
+    }
+    busy = false; $("impUrlGo").disabled = false;
   }
 
   async function importerUrls(urls) {
@@ -647,11 +680,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   });
   $("impGo").addEventListener("click", () =>
     importerUrls([...$("impRes").querySelectorAll("input:checked")].map(c => c.value)));
-  $("impUrlGo").addEventListener("click", () => {
-    const u = $("impUrl").value.trim(); if (u) importerUrls([u]);
-  });
+  $("impUrlGo").addEventListener("click", () => importerOuLister($("impUrl").value.trim()));
   $("impUrl").addEventListener("keydown", e => {
-    if (e.key === "Enter") { const u = e.target.value.trim(); if (u) importerUrls([u]); }
+    if (e.key === "Enter") importerOuLister(e.target.value.trim());
   });
 
   document.querySelectorAll("[data-close]").forEach(b =>
