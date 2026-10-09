@@ -494,8 +494,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const API = SUR_SERVEUR ? "" : "http://localhost:8765";
   let busy = false;
 
-  async function api(path) {
-    const r = await fetch(API + path);
+  // POST pour tout ce qui écrit dans la base du serveur ; l'en-tête X-Recettes est exigé (anti-CSRF)
+  async function api(path, { post = false } = {}) {
+    const r = await fetch(API + path, post ? { method: "POST", headers: { "X-Recettes": "1" } } : undefined);
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.erreur || `HTTP ${r.status}`);
     return d;
@@ -547,7 +548,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     log(`🔗 ${u}`);
     let liste = false;
     try {
-      const r = await api(`/api/recipe?url=${encodeURIComponent(u)}`);
+      const r = await api(`/api/recipe?url=${encodeURIComponent(u)}`, { post: true });
       importer([r]);
       log(`✓ ${nettoyerNom(r.nom)}`);
       toast("1 recette importée");
@@ -575,7 +576,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     try {
       for (const [i, u] of urls.entries()) {
         try {
-          const r = await api(`/api/recipe?url=${encodeURIComponent(u)}`);
+          const r = await api(`/api/recipe?url=${encodeURIComponent(u)}`, { post: true });
           importer([r], { differe: true }); ok++;
           log(`[${i + 1}/${urls.length}] ✓ ${nettoyerNom(r.nom)}`);
         } catch (e) { log(`[${i + 1}/${urls.length}] ✗ ${u} → ${e.message}`); }
