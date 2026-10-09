@@ -46,10 +46,16 @@ une base chargée via **📂 Charger JSON**. Pour importer depuis une page ouver
 
 ### Sécurité du serveur local
 
-L'API n'accepte que la page servie par le serveur lui-même et
-`https://pmeyssonnier.github.io`. Les appels venant d'autres sites ouverts dans le
-navigateur sont refusés (403), y compris les requêtes déguisées en image ou lien.
-L'import par URL est limité aux domaines de la liste `SITES`.
+- L'API n'accepte que la page servie par le serveur lui-même et
+  `https://pmeyssonnier.github.io`. Les appels venant d'autres sites sont refusés (403).
+- L'en-tête `Host` est vérifié (`localhost`, adresses IP locales ; réseau privé seulement avec
+  `--lan`) : cela bloque le *DNS rebinding*. Autre nom d'hôte (ex. `monpc.local`) :
+  `RECETTES_HOTES=monpc.local`.
+- Le serveur ne sert **que** la page HTML : ni `.git/`, ni le code source, ni la base JSON.
+- L'import par URL est limité aux domaines de `SITES`. Les redirections sont suivies à la main
+  et revalidées (domaine autorisé, pas de retour en `http`, `robots.txt`, 5 sauts maximum).
+- La page applique une politique CSP, n'accepte que des URL `http(s)` pour les liens et images
+  d'un JSON importé, et affiche les images sans transmettre de référent.
 
 ### Version en ligne (GitHub Pages)
 
@@ -117,6 +123,12 @@ Pour vérifier que les sources répondent encore (après une mise à jour d'un s
 
 ```bash
 python tester_sources.py            # ou : python tester_sources.py quiche
+```
+
+## Tests
+
+```bash
+python -m unittest discover -s tests     # hors ligne : durées, Host, fichiers servis, redirections
 ```
 
 ## Ajouter un site
