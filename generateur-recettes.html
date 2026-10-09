@@ -185,7 +185,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 <dialog id="dlgImport">
   <div class="dlg-head"><h2>🌐 Importer des recettes</h2><button class="icon-btn" data-close>✕</button></div>
   <div class="dlg-body">
-    <h4>Recherche sur Marmiton</h4>
+    <h4>Recherche</h4>
+    <div class="inline" style="margin-bottom:8px">
+      <select id="impSrc" style="width:auto"><option value="marmiton">Marmiton</option></select>
+      <span class="hint" id="impSrcAide" style="margin:0"></span>
+    </div>
     <div class="inline">
       <input type="text" id="impQ" placeholder="ex. blanquette, curry de légumes…">
       <input type="number" id="impN" value="10" min="1" max="50" title="Nombre max de résultats">
@@ -483,10 +487,12 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   async function rechercher() {
     const q = $("impQ").value.trim(); if (!q) return;
     const n = +$("impN").value || 10;
-    $("impRes").innerHTML = ""; log(`🔎 Recherche « ${q} »…`);
+    const src = $("impSrc").value;
+    const nomSrc = $("impSrc").selectedOptions[0]?.textContent || src;
+    $("impRes").innerHTML = ""; log(`🔎 Recherche « ${q} » sur ${nomSrc}…`);
     $("impSearch").disabled = true;
     try {
-      const res = await api(`/api/search?q=${encodeURIComponent(q)}&n=${n}`);
+      const res = await api(`/api/search?source=${encodeURIComponent(src)}&q=${encodeURIComponent(q)}&n=${n}`);
       const connues = new Set(recettes.map(r => r.url));
       $("impRes").innerHTML = res.length ? res.map(x => {
         const deja = connues.has(x.url);
@@ -603,6 +609,23 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   $("expFiltre").addEventListener("click", () => telecharger(st.surprise || filtrer(), "selection"));
   $("expFav").addEventListener("click", () => telecharger(recettes.filter(r => st.favs.has(r.url)), "favoris"));
 
+  // Liste des sources de recherche fournie par le serveur
+  let sources = [];
+  async function chargerSources() {
+    try {
+      sources = await api("/api/sources");
+      const actuelle = $("impSrc").value;
+      $("impSrc").innerHTML = sources.map(s => `<option value="${esc(s.id)}">${esc(s.nom)}</option>`).join("");
+      if (sources.some(s => s.id === actuelle)) $("impSrc").value = actuelle;
+      majAideSource();
+    } catch { /* ancien serveur : Marmiton seul */ }
+  }
+  function majAideSource() {
+    const s = sources.find(x => x.id === $("impSrc").value);
+    $("impSrcAide").textContent = s ? s.aide : "";
+  }
+  $("impSrc").addEventListener("change", majAideSource);
+
   $("btnImport").addEventListener("click", async () => {
     $("dlgImport").showModal();
     if (!await ping()) {
@@ -610,6 +633,8 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       if (location.protocol === "file:")
         log("ℹ Page ouverte comme fichier : utilise plutôt http://localhost:8765 " +
             "(ou lance le serveur avec RECETTES_ORIGINES=null)");
+    } else if (!sources.length) {
+      await chargerSources();
     }
     $("impQ").focus();
   });
