@@ -128,7 +128,8 @@ python tester_sources.py            # ou : python tester_sources.py quiche
 ## Tests
 
 ```bash
-python -m unittest discover -s tests     # hors ligne : durées, Host, fichiers servis, redirections
+python -m unittest discover -s tests     # hors ligne : parseurs JSON-LD, listes de recettes, sources,
+                                          # durées, Host, fichiers servis, redirections, base JSON
 ```
 
 Ces tests et une vérification `pyflakes` tournent automatiquement sur GitHub Actions
