@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Générateur de recettes</title>
+<style>
+:root{
+  --bg:#faf7f2; --panel:#ffffff; --text:#2b2620; --muted:#7a7066; --line:#e8e1d7;
+  --accent:#c2541b; --accent-soft:#fbe9df; --ok:#2e7d4f; --ok-soft:#e3f3e9; --ko:#b3261e; --ko-soft:#fbe4e2;
+  --shadow:0 1px 3px rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#1b1916;--panel:#252220;--text:#eee7de;--muted:#a59a8e;--line:#3a3530;
+  --accent:#ff8a4c;--accent-soft:#3d2a1f;--ok:#6fcf97;--ok-soft:#1f3328;--ko:#ff8a80;--ko-soft:#3d2321;
+  --shadow:0 1px 3px rgba(0,0,0,.4);}
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+  padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header h1{font-size:1.25rem;margin:0}
+header .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.count{color:var(--muted);font-size:.9rem}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--text);
+  padding:7px 12px;border-radius:8px;cursor:pointer;text-decoration:none}
+button:hover,.btn:hover{border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:wait}
+.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.primary:hover{filter:brightness(1.08)}
+.badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--accent);color:#fff;font-size:.8rem;text-align:center}
+main{display:grid;grid-template-columns:280px 1fr;gap:20px;padding:20px;max-width:1400px;margin:auto}
+@media (max-width:800px){main{grid-template-columns:1fr;padding:12px}}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;height:fit-content;
+  position:sticky;top:80px}
+@media (max-width:800px){aside{position:static}}
+aside label{display:block;font-weight:600;font-size:.85rem;margin:14px 0 6px}
+aside label:first-child{margin-top:0}
+input[type=text],select{width:100%;font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;
+  background:var(--bg);color:var(--text)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chip{font-size:.82rem;padding:3px 8px;border-radius:12px;cursor:pointer;user-select:none}
+.chip.avec{background:var(--ok-soft);color:var(--ok)}
+.chip.sans{background:var(--ko-soft);color:var(--ko)}
+.chip::after{content:" ×";opacity:.7}
+.hint{font-size:.78rem;color:var(--muted);margin-top:4px}
+.row{display:flex;gap:8px;margin-top:16px}
+.row button{flex:1}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;align-content:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;cursor:pointer;transition:transform .12s}
+.card:hover{transform:translateY(-2px)}
+.card .img{aspect-ratio:4/3;background:var(--accent-soft) center/cover no-repeat;display:flex;align-items:center;
+  justify-content:center;font-size:2.5rem}
+.card .body{padding:12px;display:flex;flex-direction:column;gap:6px;flex:1}
+.card h3{margin:0;font-size:1rem;line-height:1.3}
+.meta{display:flex;flex-wrap:wrap;gap:10px;font-size:.82rem;color:var(--muted)}
+.card .foot{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:6px}
+.icon-btn{border:none;background:none;font-size:1.2rem;padding:2px 6px;cursor:pointer}
+.icon-btn.off{filter:grayscale(1);opacity:.45}
+.empty{grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--muted);border:2px dashed var(--line);border-radius:12px}
+.banner{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;
+  background:var(--accent-soft);padding:10px 14px;border-radius:10px}
+dialog{border:none;border-radius:14px;padding:0;max-width:760px;width:94vw;background:var(--panel);color:var(--text);
+  box-shadow:0 10px 40px rgba(0,0,0,.3)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.dlg-head{display:flex;justify-content:space-between;align-items:start;gap:12px;padding:18px 20px;border-bottom:1px solid var(--line)}
+.dlg-head h2{margin:0;font-size:1.25rem}
+.dlg-body{padding:18px 20px;max-height:70vh;overflow:auto}
+.dlg-body h4{margin:18px 0 8px}
+.dlg-body h4:first-child{margin-top:0}
+.ing{list-style:none;padding:0;margin:0}
+.ing li{padding:5px 0;border-bottom:1px solid var(--line)}
+.ing label{display:flex;gap:8px;cursor:pointer}
+.ing input:checked+span{text-decoration:line-through;color:var(--muted)}
+ol.steps li{margin-bottom:10px;line-height:1.5}
+.dlg-foot{display:flex;gap:8px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--line);flex-wrap:wrap}
+textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;border:1px solid var(--line);
+  border-radius:8px;background:var(--bg);color:var(--text)}
+.drop{outline:3px dashed var(--accent);outline-offset:-10px}
+.srv{font-size:.8rem;padding:3px 8px;border-radius:10px}
+.srv.on{background:var(--ok-soft);color:var(--ok)}
+.srv.off{background:var(--ko-soft);color:var(--ko)}
+.res{list-style:none;padding:0;margin:10px 0}
+.res li{padding:6px 0;border-bottom:1px solid var(--line)}
+.res label{display:flex;gap:8px;cursor:pointer}
+.inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.inline input[type=text]{flex:1;min-width:180px}
+.inline input[type=number]{width:70px;font:inherit;padding:7px;border:1px solid var(--line);border-radius:8px;
+  background:var(--bg);color:var(--text)}
+.log{font-family:ui-monospace,Consolas,monospace;font-size:.8rem;background:var(--bg);border:1px solid var(--line);
+  border-radius:8px;padding:8px;max-height:160px;overflow:auto;white-space:pre-wrap;margin-top:12px;min-height:40px}
+.opt{display:flex;flex-direction:column;gap:10px}
+.opt button{text-align:left;padding:12px 14px}
+.opt small{display:block;color:var(--muted);margin-top:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍲 Générateur de recettes</h1>
+  <div class="actions">
+    <span class="count" id="count">0 recette</span>
+    <label class="btn primary" for="file">📂 Charger JSON</label>
+    <input type="file" id="file" accept=".json,application/json" multiple hidden>
+    <button id="btnImport">🌐 Importer</button>
+    <button id="btnExport" title="Sauvegarder en JSON">💾 Exporter</button>
+    <span class="srv off" id="srvStatus" title="Serveur Python local">● hors ligne</span>
+    <button id="btnPanier">🛒 Courses <span class="badge" id="nbPanier">0</span></button>
+    <button id="btnClear" title="Vider la base locale">🗑</button>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <label for="q">Recherche</label>
+    <input type="text" id="q" placeholder="Nom, catégorie, mot-clé…">
+
+    <label for="avecIn">Avec ces ingrédients</label>
+    <input type="text" id="avecIn" placeholder="ex. poulet  ↵">
+    <div class="chips" id="avecChips"></div>
+
+    <label for="sansIn">Sans ces ingrédients</label>
+    <input type="text" id="sansIn" placeholder="ex. crème  ↵">
+    <div class="chips" id="sansChips"></div>
+    <div class="hint">Entrée pour ajouter, clic sur une étiquette pour la retirer. Accents ignorés.</div>
+
+    <label for="tmax">Temps total max : <span id="tmaxVal">illimité</span></label>
+    <input type="range" id="tmax" min="0" max="240" step="10" value="0">
+
+    <label for="nmin">Note minimale</label>
+    <select id="nmin">
+      <option value="0">Toutes</option><option value="3">3+</option>
+      <option value="4">4+</option><option value="4.5">4,5+</option>
+    </select>
+
+    <label for="cat">Catégorie</label>
+    <select id="cat"><option value="">Toutes</option></select>
+
+    <label for="tri">Trier par</label>
+    <select id="tri">
+      <option value="note">Note</option><option value="avis">Nombre d'avis</option>
+      <option value="temps">Temps (rapide d'abord)</option><option value="ing">Nb d'ingrédients</option>
+      <option value="nom">Nom</option>
+    </select>
+
+    <label><input type="checkbox" id="favOnly"> Favoris uniquement</label>
+
+    <div class="row">
+      <button class="primary" id="btnSurprise">🎲 Surprends-moi</button>
+      <button id="btnReset">Réinitialiser</button>
+    </div>
+  </aside>
+
+  <section id="grid"></section>
+</main>
+
+<dialog id="dlgRecette">
+  <div class="dlg-head">
+    <div><h2 id="dTitre"></h2><div class="meta" id="dMeta" style="margin-top:6px"></div></div>
+    <button class="icon-btn" data-close>✕</button>
+  </div>
+  <div class="dlg-body">
+    <h4>Ingrédients</h4><ul class="ing" id="dIng"></ul>
+    <h4>Préparation</h4><ol class="steps" id="dSteps"></ol>
+  </div>
+  <div class="dlg-foot">
+    <a class="btn" id="dLink" target="_blank" rel="noopener">Voir la recette ↗</a>
+    <button id="dPanier"></button>
+    <button class="primary" data-close>Fermer</button>
+  </div>
+</dialog>
+
+<dialog id="dlgPanier">
+  <div class="dlg-head"><h2>🛒 Liste de courses</h2><button class="icon-btn" data-close>✕</button></div>
+  <div class="dlg-body"><textarea id="txtCourses"></textarea></div>
+  <div class="dlg-foot">
+    <button id="btnViderPanier">Vider le panier</button>
+    <button id="btnCopier">📋 Copier</button>
+    <button class="primary" data-close>Fermer</button>
+  </div>
+</dialog>
+
+<dialog id="dlgImport">
+  <div class="dlg-head"><h2>🌐 Importer des recettes</h2><button class="icon-btn" data-close>✕</button></div>
+  <div class="dlg-body">
+    <h4>Recherche sur Marmiton</h4>
+    <div class="inline">
+      <input type="text" id="impQ" placeholder="ex. blanquette, curry de légumes…">
+      <input type="number" id="impN" value="10" min="1" max="50" title="Nombre max de résultats">
+      <button class="primary" id="impSearch">Rechercher</button>
+    </div>
+    <ul class="res" id="impRes"></ul>
+    <div class="inline">
+      <button id="impAll">Tout cocher / décocher</button>
+      <button class="primary" id="impGo">⬇ Importer la sélection</button>
+    </div>
+    <h4>Ou une URL de recette</h4>
+    <div class="inline">
+      <input type="text" id="impUrl" placeholder="URL d'une recette (Marmiton, 750g, Cuisine AZ, Ricardo…)">
+      <button id="impUrlGo">Importer</button>
+    </div>
+    <div class="log" id="impLog"></div>
+  </div>
+</dialog>
+
+<dialog id="dlgExport">
+  <div class="dlg-head"><h2>💾 Exporter en JSON</h2><button class="icon-btn" data-close>✕</button></div>
+  <div class="dlg-body">
+    <div class="opt">
+      <button id="expTout">📚 Toute la base<small id="expToutInfo"></small></button>
+      <button id="expFiltre">🔎 Recettes affichées (filtres actifs)<small id="expFiltreInfo"></small></button>
+      <button id="expFav">❤️ Favoris uniquement<small id="expFavInfo"></small></button>
+    </div>
+    <p class="hint" style="margin-top:14px">Le fichier est téléchargé dans <b>Téléchargements</b>.
+      Le serveur garde en plus une copie automatique dans <b>recettes_marmiton.json</b>,
+      à côté de <code>serveur_recettes.py</code>.</p>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  "use strict";
+  const KEY = "gen_recettes_v1";
+  const $ = id => document.getElementById(id);
+
+  // ---------- État ----------
+  let recettes = [];
+  const st = { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", tri:"note", favOnly:false,
+               surprise:null, panier:new Set(), favs:new Set() };
+
+  // ---------- Stockage local ----------
+  const sansIndex = ({ _ing, _txt, _note, _avis, _tps, ...r }) => r;
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        recettes: recettes.map(sansIndex), panier: [...st.panier], favs: [...st.favs]
+      }));
+    } catch (e) { console.warn("Stockage impossible :", e); }
+  }
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (d) {
+        recettes = d.recettes || [];
+        st.panier = new Set(d.panier || []);
+        st.favs = new Set(d.favs || []);
+      }
+    } catch (e) { console.warn("Lecture impossible :", e); }
+  }
+
+  // ---------- Utilitaires ----------
+  const norm = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const esc = s => String(s ?? "").replace(/[&<>"']/g,
+    c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  const num = v => { const n = parseFloat(String(v ?? "").replace(",", ".")); return isNaN(n) ? null : n; };
+  const total = r => r.total_min ?? (((r.prep_min || 0) + (r.cuisson_min || 0)) || null);
+  const fmtMin = m => m == null ? "?" : m >= 60 ? `${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")}` : `${m} min`;
+  const catOf = r => Array.isArray(r.categorie) ? r.categorie.join(", ") : (r.categorie || "");
+  const nettoyerNom = s => String(s || "").replace(/ /g, " ")
+    .replace(/\s*:\s*la meilleure recette\s*$/i, "").trim();
+  const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
+
+  function indexer(r) {
+    r.nom = nettoyerNom(r.nom);
+    if (!r.source && r.url) { try { r.source = new URL(r.url).hostname.replace(/^www\./, ""); } catch {} }
+    r._ing = norm((r.ingredients || []).join(" | "));
+    r._txt = norm([r.nom, catOf(r), r.cuisine, r.mots_cles, r.source].flat().join(" "));
+    r._note = num(r.note);
+    r._avis = num(r.nb_avis) || 0;
+    r._tps = total(r);
+    return r;
+  }
+
+  function toast(msg) {
+    const t = document.createElement("div");
+    t.textContent = msg;
+    Object.assign(t.style, { position:"fixed", bottom:"20px", left:"50%", transform:"translateX(-50%)",
+      background:"var(--text)", color:"var(--bg)", padding:"10px 18px", borderRadius:"8px", zIndex:99 });
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2500);
+  }
+
+  // ---------- Import JSON ----------
+  function importer(data) {
+    const arr = Array.isArray(data) ? data : (data.recettes || [data]);
+    const parUrl = new Map(recettes.map(r => [r.url || r.nom, r]));
+    let ajout = 0;
+    for (const r of arr) {
+      if (!r || !r.nom) continue;
+      const k = r.url || r.nom;
+      if (!parUrl.has(k)) ajout++;
+      if (r.favori === true && r.url) st.favs.add(r.url);
+      delete r.favori;
+      parUrl.set(k, r);
+    }
+    recettes = [...parUrl.values()].map(indexer);
+    save(); remplirCategories(); render();
+    return ajout;
+  }
+
+  async function lireFichiers(files) {
+    let ajout = 0;
+    for (const f of files) {
+      try { ajout += importer(JSON.parse(await f.text())); }
+      catch (e) { alert(`Fichier invalide : ${f.name}\n${e.message}`); }
+    }
+    if (ajout) toast(`${pluriel(ajout, "recette")} ajoutée(s)`);
+  }
+
+  // ---------- Export JSON ----------
+  function telecharger(liste, suffixe) {
+    if (!liste.length) { toast("Rien à exporter"); return; }
+    const propre = liste.map(r => ({ ...sansIndex(r), favori: st.favs.has(r.url) }));
+    const blob = new Blob([JSON.stringify(propre, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `recettes_${suffixe}_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    $("dlgExport").close();
+    toast(`${pluriel(propre.length, "recette")} → Téléchargements/${a.download}`);
+  }
+  function ouvrirExport() {
+    if (!recettes.length) { toast("Aucune recette à exporter"); return; }
+    const affichees = st.surprise || filtrer();
+    const favs = recettes.filter(r => st.favs.has(r.url));
+    $("expToutInfo").textContent = pluriel(recettes.length, "recette");
+    $("expFiltreInfo").textContent = pluriel(affichees.length, "recette");
+    $("expFavInfo").textContent = pluriel(favs.length, "recette");
+    $("expFiltre").disabled = !affichees.length;
+    $("expFav").disabled = !favs.length;
+    $("dlgExport").showModal();
+  }
+
+  // ---------- Filtrage ----------
+  function filtrer() {
+    const q = norm(st.q).trim();
+    const out = recettes.filter(r => {
+      if (q && !r._txt.includes(q)) return false;
+      if (st.avec.some(x => !r._ing.includes(norm(x)))) return false;
+      if (st.sans.some(x => r._ing.includes(norm(x)))) return false;
+      if (st.tmax && (r._tps == null || r._tps > st.tmax)) return false;
+      if (st.nmin && (r._note ?? 0) < st.nmin) return false;
+      if (st.cat && catOf(r) !== st.cat) return false;
+      if (st.favOnly && !st.favs.has(r.url)) return false;
+      return true;
+    });
+    const tris = {
+      note: (a,b) => (b._note ?? 0) - (a._note ?? 0) || b._avis - a._avis,
+      avis: (a,b) => b._avis - a._avis,
+      temps:(a,b) => (a._tps ?? 1e9) - (b._tps ?? 1e9),
+      ing:  (a,b) => (a.ingredients?.length || 0) - (b.ingredients?.length || 0),
+      nom:  (a,b) => String(a.nom).localeCompare(String(b.nom), "fr"),
+    };
+    return out.sort(tris[st.tri]);
+  }
+
+  // ---------- Rendu ----------
+  function render() {
+    const grid = $("grid");
+    const liste = st.surprise || filtrer();
+    $("count").textContent = `${liste.length} / ${pluriel(recettes.length, "recette")}`;
+    $("nbPanier").textContent = st.panier.size;
+
+    if (!recettes.length) {
+      grid.innerHTML = `<div class="empty">Aucune recette chargée.<br><br>
+        Clique sur <b>🌐 Importer</b> (serveur Python lancé),<br>
+        ou sur <b>📂 Charger JSON</b> / glisse ton fichier <code>recettes_marmiton.json</code> ici.</div>`;
+      return;
+    }
+    let html = st.surprise
+      ? `<div class="banner"><span>🎲 Sélection au hasard parmi les recettes filtrées</span>
+         <span><button id="reroll">Relancer</button> <button id="voirTout">Tout afficher</button></span></div>`
+      : "";
+    if (!liste.length) html += `<div class="empty">Aucune recette ne correspond aux filtres.</div>`;
+
+    html += liste.map(r => {
+      const i = recettes.indexOf(r);
+      const fav = st.favs.has(r.url), pan = st.panier.has(r.url);
+      return `<article class="card" data-i="${i}">
+        <div class="img" ${r.image ? `style="background-image:url('${esc(r.image)}')"` : ""}>${r.image ? "" : "🍽"}</div>
+        <div class="body">
+          <h3>${esc(r.nom)}</h3>
+          <div class="meta">
+            <span>⭐ ${r._note ?? "–"}${r._avis ? ` (${r._avis})` : ""}</span>
+            <span>⏱ ${fmtMin(r._tps)}</span>
+            <span>🥕 ${r.ingredients?.length || 0}</span>
+          </div>
+          ${catOf(r) ? `<div class="meta">${esc(catOf(r))}</div>` : ""}
+          <div class="foot">
+            <span class="meta">${esc(r.portions || "")}</span>
+            <span>
+              <button class="icon-btn ${fav ? "on" : "off"}" data-fav="${i}" title="Favori">❤️</button>
+              <button class="icon-btn ${pan ? "on" : "off"}" data-pan="${i}" title="Ajouter aux courses">🛒</button>
+            </span>
+          </div>
+        </div></article>`;
+    }).join("");
+    grid.innerHTML = html;
+  }
+
+  function renderChips() {
+    for (const k of ["avec", "sans"]) {
+      $(k + "Chips").innerHTML = st[k].map((x, j) =>
+        `<span class="chip ${k}" data-k="${k}" data-j="${j}">${esc(x)}</span>`).join("");
+    }
+  }
+
+  function remplirCategories() {
+    const cats = [...new Set(recettes.map(catOf).filter(Boolean))].sort((a,b) => a.localeCompare(b, "fr"));
+    $("cat").innerHTML = `<option value="">Toutes</option>` +
+      cats.map(c => `<option${c === st.cat ? " selected" : ""}>${esc(c)}</option>`).join("");
+  }
+
+  // ---------- Détail ----------
+  let courante = null;
+  function ouvrir(r) {
+    courante = r;
+    $("dTitre").textContent = r.nom;
+    $("dMeta").innerHTML = [
+      `⭐ ${r._note ?? "–"}${r._avis ? ` (${r._avis} avis)` : ""}`,
+      `🍴 ${esc(r.portions || "?")}`,
+      `Prép. ${fmtMin(r.prep_min)}`, `Cuisson ${fmtMin(r.cuisson_min)}`, `Total ${fmtMin(r._tps)}`,
+      `🌐 ${esc(r.source || "?")}`
+    ].map(s => `<span>${s}</span>`).join("");
+    $("dIng").innerHTML = (r.ingredients || []).map(x =>
+      `<li><label><input type="checkbox"><span>${esc(x)}</span></label></li>`).join("");
+    $("dSteps").innerHTML = (r.etapes || []).map(x => `<li>${esc(x)}</li>`).join("")
+      || "<li><i>Étapes non disponibles</i></li>";
+    $("dLink").href = r.url || "#";
+    $("dLink").style.display = r.url ? "" : "none";
+    majBoutonPanier();
+    $("dlgRecette").showModal();
+  }
+  function majBoutonPanier() {
+    $("dPanier").textContent = st.panier.has(courante.url) ? "✓ Dans les courses" : "🛒 Ajouter aux courses";
+  }
+
+  // ---------- Panier ----------
+  function togglePanier(r) {
+    st.panier.has(r.url) ? st.panier.delete(r.url) : st.panier.add(r.url);
+    save(); render();
+  }
+  function listeCourses() {
+    const sel = recettes.filter(r => st.panier.has(r.url));
+    if (!sel.length) return "Panier vide — ajoute des recettes avec 🛒.";
+    return sel.map(r =>
+      `== ${r.nom} (${r.portions || "?"}) ==\n` + (r.ingredients || []).map(x => `☐ ${x}`).join("\n")
+    ).join("\n\n");
+  }
+
+  // ---------- Serveur Python local ----------
+  const API = location.protocol.startsWith("http") ? "" : "http://localhost:8765";
+  let busy = false;
+
+  async function api(path) {
+    const r = await fetch(API + path);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.erreur || `HTTP ${r.status}`);
+    return d;
+  }
+  async function ping() {
+    const s = $("srvStatus");
+    try {
+      const d = await api("/api/ping");
+      s.className = "srv on"; s.textContent = `● serveur (${d.base} en base)`;
+      s.title = `Sauvegarde automatique : ${d.fichier || "recettes_marmiton.json"}`;
+      return d;
+    } catch {
+      s.className = "srv off"; s.textContent = "● hors ligne";
+      s.title = "Serveur Python local non lancé";
+      return null;
+    }
+  }
+  function log(msg) { const l = $("impLog"); l.textContent += msg + "\n"; l.scrollTop = l.scrollHeight; }
+
+  async function rechercher() {
+    const q = $("impQ").value.trim(); if (!q) return;
+    const n = +$("impN").value || 10;
+    $("impRes").innerHTML = ""; log(`🔎 Recherche « ${q} »…`);
+    $("impSearch").disabled = true;
+    try {
+      const res = await api(`/api/search?q=${encodeURIComponent(q)}&n=${n}`);
+      const connues = new Set(recettes.map(r => r.url));
+      $("impRes").innerHTML = res.length ? res.map(x => {
+        const deja = connues.has(x.url);
+        return `<li><label><input type="checkbox" value="${esc(x.url)}" ${deja ? "" : "checked"}>
+          <span>${esc(x.titre)}${deja ? ' <i class="meta">(déjà en base)</i>' : ""}</span></label></li>`;
+      }).join("") : "<li><i>Aucun résultat</i></li>";
+      log(`${res.length} résultat(s)`);
+    } catch (e) { log("✗ " + e.message); }
+    $("impSearch").disabled = false;
+  }
+
+  async function importerUrls(urls) {
+    if (busy || !urls.length) return;
+    busy = true; $("impGo").disabled = $("impUrlGo").disabled = true;
+    let ok = 0;
+    for (const [i, u] of urls.entries()) {
+      try {
+        const r = await api(`/api/recipe?url=${encodeURIComponent(u)}`);
+        importer([r]); ok++;
+        log(`[${i + 1}/${urls.length}] ✓ ${nettoyerNom(r.nom)}`);
+      } catch (e) { log(`[${i + 1}/${urls.length}] ✗ ${u} → ${e.message}`); }
+    }
+    busy = false; $("impGo").disabled = $("impUrlGo").disabled = false;
+    log(`Terminé : ${ok}/${urls.length} importée(s)`);
+    if (ok) log("💾 Sauvegardé automatiquement dans recettes_marmiton.json (dossier du serveur)");
+    if (ok) toast(`${pluriel(ok, "recette")} importée(s)`);
+    ping();
+  }
+
+  // ---------- Événements ----------
+  $("file").addEventListener("change", e => { lireFichiers(e.target.files); e.target.value = ""; });
+
+  document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("drop"); });
+  document.addEventListener("dragleave", e => { if (!e.relatedTarget) document.body.classList.remove("drop"); });
+  document.addEventListener("drop", e => {
+    e.preventDefault(); document.body.classList.remove("drop");
+    if (e.dataTransfer.files.length) lireFichiers(e.dataTransfer.files);
+  });
+
+  const filtreChange = () => { st.surprise = null; render(); };
+  $("q").addEventListener("input", e => { st.q = e.target.value; filtreChange(); });
+  $("tmax").addEventListener("input", e => {
+    st.tmax = +e.target.value;
+    $("tmaxVal").textContent = st.tmax ? fmtMin(st.tmax) : "illimité";
+    filtreChange();
+  });
+  $("nmin").addEventListener("change", e => { st.nmin = +e.target.value; filtreChange(); });
+  $("cat").addEventListener("change", e => { st.cat = e.target.value; filtreChange(); });
+  $("tri").addEventListener("change", e => { st.tri = e.target.value; filtreChange(); });
+  $("favOnly").addEventListener("change", e => { st.favOnly = e.target.checked; filtreChange(); });
+
+  for (const k of ["avec", "sans"]) {
+    $(k + "In").addEventListener("keydown", e => {
+      if (e.key !== "Enter") return;
+      const v = e.target.value.trim();
+      if (v && !st[k].includes(v)) st[k].push(v);
+      e.target.value = ""; renderChips(); filtreChange();
+    });
+    $(k + "Chips").addEventListener("click", e => {
+      const c = e.target.closest(".chip"); if (!c) return;
+      st[c.dataset.k].splice(+c.dataset.j, 1); renderChips(); filtreChange();
+    });
+  }
+
+  function surprise() {
+    const pool = filtrer();
+    if (!pool.length) { toast("Aucune recette avec ces filtres"); return; }
+    const copie = [...pool];
+    for (let i = copie.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1)); [copie[i], copie[j]] = [copie[j], copie[i]];
+    }
+    st.surprise = copie.slice(0, 3); render();
+  }
+  $("btnSurprise").addEventListener("click", surprise);
+
+  $("btnReset").addEventListener("click", () => {
+    Object.assign(st, { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", tri:"note", favOnly:false, surprise:null });
+    $("q").value = ""; $("tmax").value = 0; $("tmaxVal").textContent = "illimité";
+    $("nmin").value = "0"; $("cat").value = ""; $("tri").value = "note"; $("favOnly").checked = false;
+    renderChips(); render();
+  });
+
+  $("grid").addEventListener("click", e => {
+    if (e.target.id === "reroll") return surprise();
+    if (e.target.id === "voirTout") { st.surprise = null; return render(); }
+    const fav = e.target.closest("[data-fav]"), pan = e.target.closest("[data-pan]");
+    if (fav) {
+      const r = recettes[+fav.dataset.fav];
+      st.favs.has(r.url) ? st.favs.delete(r.url) : st.favs.add(r.url);
+      save(); return render();
+    }
+    if (pan) return togglePanier(recettes[+pan.dataset.pan]);
+    const card = e.target.closest(".card");
+    if (card) ouvrir(recettes[+card.dataset.i]);
+  });
+
+  $("dPanier").addEventListener("click", () => { togglePanier(courante); majBoutonPanier(); });
+  $("btnPanier").addEventListener("click", () => { $("txtCourses").value = listeCourses(); $("dlgPanier").showModal(); });
+  $("btnViderPanier").addEventListener("click", () => {
+    st.panier.clear(); save(); render(); $("txtCourses").value = listeCourses();
+  });
+  $("btnCopier").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($("txtCourses").value); toast("Liste copiée"); }
+    catch { $("txtCourses").select(); document.execCommand("copy"); toast("Liste copiée"); }
+  });
+  $("btnClear").addEventListener("click", () => {
+    if (!confirm("Vider la base de recettes du navigateur (favoris et panier compris) ?\n" +
+                 "Le fichier recettes_marmiton.json du serveur n'est pas touché.")) return;
+    recettes = []; st.panier.clear(); st.favs.clear(); save(); remplirCategories(); render();
+  });
+
+  $("btnExport").addEventListener("click", ouvrirExport);
+  $("expTout").addEventListener("click", () => telecharger(recettes, "base"));
+  $("expFiltre").addEventListener("click", () => telecharger(st.surprise || filtrer(), "selection"));
+  $("expFav").addEventListener("click", () => telecharger(recettes.filter(r => st.favs.has(r.url)), "favoris"));
+
+  $("btnImport").addEventListener("click", async () => {
+    $("dlgImport").showModal();
+    if (!await ping()) log("⚠ Serveur local injoignable. Lance : python serveur_recettes.py");
+    $("impQ").focus();
+  });
+  $("impSearch").addEventListener("click", rechercher);
+  $("impQ").addEventListener("keydown", e => { if (e.key === "Enter") rechercher(); });
+  $("impAll").addEventListener("click", () => {
+    const cbs = [...$("impRes").querySelectorAll("input")];
+    const tous = cbs.every(c => c.checked);
+    cbs.forEach(c => c.checked = !tous);
+  });
+  $("impGo").addEventListener("click", () =>
+    importerUrls([...$("impRes").querySelectorAll("input:checked")].map(c => c.value)));
+  $("impUrlGo").addEventListener("click", () => {
+    const u = $("impUrl").value.trim(); if (u) importerUrls([u]);
+  });
+  $("impUrl").addEventListener("keydown", e => {
+    if (e.key === "Enter") { const u = e.target.value.trim(); if (u) importerUrls([u]); }
+  });
+
+  document.querySelectorAll("[data-close]").forEach(b =>
+    b.addEventListener("click", () => b.closest("dialog").close()));
+  document.querySelectorAll("dialog").forEach(d =>
+    d.addEventListener("click", e => { if (e.target === d) d.close(); }));
+
+  // ---------- Init ----------
+  load();
+  recettes = recettes.map(indexer);
+  save();                                   // réécrit les noms nettoyés
+  remplirCategories(); renderChips(); render();
+
+  // Si le navigateur est vide mais que le serveur a une base, on la reprend
+  ping().then(async d => {
+    if (d && d.base && !recettes.length) {
+      try {
+        const n = importer(await api("/api/base"));
+        if (n) toast(`${pluriel(n, "recette")} chargée(s) depuis le serveur`);
+      } catch (e) { console.warn(e); }
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Données extraites : contenu des sites sources, à ne pas redistribuer
+recettes_marmiton.json
+recettes_*.json
+*.tmp
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Système
+.DS_Store
+Thumbs.db
