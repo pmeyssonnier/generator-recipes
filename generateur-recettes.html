@@ -100,6 +100,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 .res details li{border:0;padding:1px 0}
 .res details ul,.res details ol{margin:4px 0 6px 18px;padding:0}
 [hidden]{display:none!important}
+  sup.frac{font-size:.7em;line-height:0;margin-left:1px}
 .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .inline input[type=text]{flex:1;min-width:180px}
 .inline input[type=number]{width:70px;font:inherit;padding:7px;border:1px solid var(--line);border-radius:8px;
@@ -285,6 +286,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const norm = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const esc = s => String(s ?? "").replace(/[&<>"']/g,
     c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  // « 1 1/2 » → 1 suivi de 1/2 en petit, en exposant (nombre mixte)
+  const fractions = s => esc(s).replace(/(?<![\d\/.,])(\d+) (\d)\/([2-9])(?![\d\/])/g,
+    (m, e, a, b) => +a < +b ? `${e}<sup class="frac">${a}/${b}</sup>` : m);
   const num = v => { const n = parseFloat(String(v ?? "").replace(",", ".")); return isNaN(n) ? null : n; };
   const total = r => r.total_min || (((r.prep_min || 0) + (r.cuisson_min || 0)) || null);
   // Seules les URL http(s) sont acceptées (un JSON importé pourrait contenir « javascript: »)
@@ -495,7 +499,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       `🌐 ${esc(r.source || "?")}`
     ].map(s => `<span>${s}</span>`).join("");
     $("dIng").innerHTML = (r.ingredients || []).map(x =>
-      `<li><label><input type="checkbox"><span>${esc(x)}</span></label></li>`).join("");
+      `<li><label><input type="checkbox"><span>${fractions(x)}</span></label></li>`).join("");
     $("dSteps").innerHTML = (r.etapes || []).map(x => `<li>${esc(x)}</li>`).join("")
       || "<li><i>Étapes non disponibles</i></li>";
     $("dLink").href = r.url || "#";
@@ -626,7 +630,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       const miniature = x.image ? `<img src="${esc(imageSure(x.image))}" alt="" width="56" height="42"
         style="object-fit:cover;border-radius:6px;vertical-align:middle">` : "";
       const corps = pdf ? `<details><summary class="meta">${esc(x.detail || "")}${x.alertes?.length ? " · ⚠ " + esc(x.alertes.join(" ; ")) : ""}</summary>
-        <b>Ingrédients</b><ul>${(x.ingredients || []).map(i => `<li>${esc(i)}</li>`).join("")}</ul>
+        <b>Ingrédients</b><ul>${(x.ingredients || []).map(i => `<li>${fractions(i)}</li>`).join("")}</ul>
         <b>Étapes</b><ol>${(x.etapes || []).map(i => `<li>${esc(i)}</li>`).join("")}</ol></details>` : "";
       return `<li><label><input type="checkbox" value="${esc(x.url)}" ${deja ? "" : "checked"}>
         ${miniature}<span>${esc(x.titre)}${deja ? ' <i class="meta">(déjà en base)</i>' : ""}</span></label>${corps}</li>`;

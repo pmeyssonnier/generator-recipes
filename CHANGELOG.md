@@ -8,6 +8,12 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Corrigé
+- Source eFarmz (PDF) : une quantité comme « 1 » suivi de « 1/2 » en petit, lue « 11/2 », devient « 1 1/2 ».
+
+### Modifié
+- Les nombres mixtes (« 1 1/2 ») s'affichent avec la fraction en petit, en exposant, dans la fiche et dans les résultats d'import.
+
 ## [1.2.0] - 2026-10-10
 
 ### Ajouté
