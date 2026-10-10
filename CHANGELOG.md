@@ -9,6 +9,10 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 ## [Non publié]
 
 ### Ajouté
+- Source **eFarmz (PDF)** dans la fenêtre d'import : lit les PDF de fiches recettes déposés dans le dossier `eFarmz/`
+  (quantités pour N personnes, durées, ingrédients, étapes, photo), montre l'extraction étape par étape avec
+  miniatures et alertes, puis importe la sélection avec sa photo. Module `pdf_recettes.py`
+  (utilisable seul : `python pdf_recettes.py fichier.pdf`) ; dépendance facultative : `pdfplumber`.
 - Scripts Termux (`termux/`) : `Recettes` (lancement), `Recettes-maj` (mise à jour du serveur et de la page,
   sans toucher à la base) et un installateur pour le widget Termux:Widget et les commandes `recettes` / `recettes-maj`.
 
