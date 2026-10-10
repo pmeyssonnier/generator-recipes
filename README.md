@@ -210,6 +210,8 @@ version sont dans [CHANGELOG.md](CHANGELOG.md) ; les releases sont sur la page *
 
 3. GitHub Actions (`.github/workflows/release.yml`) vérifie que le tag correspond à `VERSION`,
    lance les tests puis crée la release avec les notes de `CHANGELOG.md`.
+   Si la release existe déjà (créée à la main via *Draft a new release* sur le site, qui crée aussi
+   le tag), le workflow la laisse telle quelle et ne signale pas d'erreur.
 
 `/api/ping` annonce aussi `api`, le numéro de protocole entre la page et le serveur (distinct de la
 version de l'application) : la page en ligne s'en sert pour rester compatible avec un serveur plus ancien.
