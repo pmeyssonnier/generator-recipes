@@ -157,6 +157,18 @@ python -m unittest discover -s tests     # hors ligne : parseurs JSON-LD, listes
                                           # durées, Host, fichiers servis, redirections, base JSON
 ```
 
+Les **tests de l'interface** (`tests/test_interface.py`, 22 tests) pilotent un vrai Chromium contre le vrai
+serveur (seules l'extraction d'une recette et la recherche sont simulées) et cliquent sur chaque bouton :
+Importer (recherche, URL, page de sélection), Exporter (téléchargements), Courses (copie dans le
+presse-papiers), favoris, fiche recette, filtres, tri, Surprends-moi, Vider, fermeture des fenêtres, plus
+le clavier, la pagination, les fichiers volumineux, le stockage plein, un nom d'hôte personnalisé et la
+compatibilité avec un ancien serveur. Ils sont ignorés si Playwright n'est pas installé :
+
+```bash
+pip install playwright && playwright install chromium
+python -m unittest tests.test_interface -v     # RECETTES_CHROMIUM=/chemin/chromium pour un Chromium existant
+```
+
 Ces tests et une vérification `pyflakes` tournent automatiquement sur GitHub Actions
 (`.github/workflows/ci.yml`, Python 3.9 et 3.13) à chaque push sur `main` et à chaque pull request.
 
