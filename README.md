@@ -58,6 +58,9 @@ une base chargée via **📂 Charger JSON**. Pour importer depuis une page ouver
 - Ce qui écrit dans la base (`POST /api/recipe`) exige l'en-tête `X-Recettes` : un site tiers ne
   peut pas l'envoyer sans pré-vol CORS, que seules les origines autorisées obtiennent. Les `GET`
   ne modifient jamais rien.
+  La page en ligne (GitHub Pages) se met à jour seule : face à un serveur local plus ancien (sans
+  `POST`), elle se rabat sur l'ancien `GET` et affiche « serveur ancien » — mets-le alors à jour
+  (`git pull`, puis relance-le) pour bénéficier de la protection renforcée.
 - Les pages téléchargées sont limitées à 5 Mo (compressées comme décompressées) et 200 pages
   restent en mémoire au maximum.
 - La page applique une politique CSP, n'accepte que des URL `http(s)` pour les liens et images

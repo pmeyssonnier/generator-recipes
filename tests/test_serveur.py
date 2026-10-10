@@ -134,6 +134,10 @@ class Serveur(unittest.TestCase):
             urllib.request.urlopen(req)
         self.assertEqual(c.exception.code, 403)
 
+    def test_ping_annonce_la_version_de_l_api(self):
+        code, body = self.get("/api/ping")
+        self.assertEqual((code, json.loads(body)["api"]), (200, s.API_VERSION))
+
     def test_head_refuse(self):
         req = urllib.request.Request(f"http://127.0.0.1:{self.port}/serveur_recettes.py", method="HEAD")
         with self.assertRaises(urllib.error.HTTPError) as c:

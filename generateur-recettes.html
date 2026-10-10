@@ -495,8 +495,25 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   let busy = false;
 
   // POST pour tout ce qui écrit dans la base du serveur ; l'en-tête X-Recettes est exigé (anti-CSRF)
+  // Un serveur local ancien (avant le POST) répond 501 / 405 : l'import se rabat alors sur GET,
+  // et l'état du serveur indique qu'il faut le mettre à jour (git pull, puis relancer).
+  let serveurAncien = false;
+  function badgeServeur(base, fichier) {
+    const s = $("srvStatus");
+    s.className = "srv on";
+    s.textContent = serveurAncien ? `● serveur ancien (${base} en base)` : `● serveur (${base} en base)`;
+    s.title = serveurAncien
+      ? "Serveur Python local ancien : il fonctionne, mais mets-le à jour (git pull) et relance-le pour la protection renforcée"
+      : `Sauvegarde automatique : ${fichier || "recettes.json"}`;
+  }
   async function api(path, { post = false } = {}) {
-    const r = await fetch(API + path, post ? { method: "POST", headers: { "X-Recettes": "1" } } : undefined);
+    let r = await fetch(API + path, post && !serveurAncien ? { method: "POST", headers: { "X-Recettes": "1" } } : undefined);
+    if (post && !serveurAncien && (r.status === 501 || r.status === 405)) {
+      serveurAncien = true;
+      r = await fetch(API + path);
+      const s = $("srvStatus"); s.textContent = s.textContent.replace("● serveur", "● serveur ancien");
+      s.title = "Serveur Python local ancien : mets-le à jour (git pull) et relance-le";
+    }
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.erreur || `HTTP ${r.status}`);
     return d;
@@ -505,8 +522,8 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     const s = $("srvStatus");
     try {
       const d = await api("/api/ping");
-      s.className = "srv on"; s.textContent = `● serveur (${d.base} en base)`;
-      s.title = `Sauvegarde automatique : ${d.fichier || "recettes.json"}`;
+      serveurAncien = (d.api || 1) < 2;
+      badgeServeur(d.base, d.fichier);
       return d;
     } catch {
       s.className = "srv off"; s.textContent = "● hors ligne";

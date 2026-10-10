@@ -30,6 +30,7 @@ BASE = "https://www.marmiton.org"
 PAUSE = 1.5  # secondes minimum entre deux requêtes sortantes
 # Le serveur s'identifie (au lieu d'imiter un navigateur) et applique les règles du robots.txt
 # visant ce nom. Si un site refuse cet identifiant : RECETTES_USER_AGENT="Mozilla/5.0 …"
+API_VERSION = 2          # 2 : l'import se fait en POST (X-Recettes) ; l'interface s'adapte aux serveurs plus anciens
 ROBOTS_NOM = "RecettesPerso"
 USER_AGENT = (os.environ.get("RECETTES_USER_AGENT", "").strip() or
               f"Mozilla/5.0 (compatible; {ROBOTS_NOM}/1.0; +https://github.com/pmeyssonnier/generator-recipes)")
@@ -611,7 +612,7 @@ class Handler(BaseHTTPRequestHandler):
         qs = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
             if u.path == "/api/ping":
-                return self.send_json({"ok": True, "base": len(lire_base()), "fichier": BASE_FILE})
+                return self.send_json({"ok": True, "api": API_VERSION, "base": len(lire_base()), "fichier": BASE_FILE})
             if u.path == "/api/base":
                 base = lire_base()
                 for r in base:
