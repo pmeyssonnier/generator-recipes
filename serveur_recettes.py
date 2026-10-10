@@ -622,10 +622,31 @@ def ajouter_base(rec):
             r["nom"] = nettoyer_nom(r.get("nom"))      # nettoie aussi les anciens imports
             base[cle_recette(r)] = r
         base[cle_recette(rec)] = rec
-        tmp = BASE_FILE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(list(base.values()), f, ensure_ascii=False, indent=2)
-        os.replace(tmp, BASE_FILE)
+        _ecrire_base(list(base.values()))
+
+
+def _ecrire_base(recettes):
+    """Écrit recettes.json en une fois (fichier temporaire puis remplacement) ; appelé avec _file_lock."""
+    tmp = BASE_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(recettes, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, BASE_FILE)
+
+
+def supprimer_base(rec):
+    """Retire de recettes.json la recette désignée (même identité que cle_recette : URL, page de PDF ou nom).
+    Renvoie le nombre de recettes retirées. Une base illisible n'est jamais modifiée."""
+    with _file_lock:
+        try:
+            existantes = lire_base_brute()
+        except BaseCorrompue:
+            return 0
+        identite = lambda r: cle_recette(dict(r, nom=nettoyer_nom(r.get("nom"))))   # noqa: E731
+        cible = identite(rec)
+        gardees = [r for r in existantes if identite(r) != cible]
+        if len(gardees) != len(existantes):
+            _ecrire_base(gardees)
+        return len(existantes) - len(gardees)
 
 
 # ---------------- HTTP ----------------
@@ -775,7 +796,7 @@ class Handler(BaseHTTPRequestHandler):
         self.api("POST", u)
 
     ROUTES_GET = {"/api/ping", "/api/base", "/api/sources", "/api/search", "/api/liste"}
-    ROUTES_POST = {"/api/recipe"}              # seule route qui écrit dans la base
+    ROUTES_POST = {"/api/recipe", "/api/supprimer"}      # les routes qui écrivent dans la base
 
     def api(self, methode, u):
         refus = self.refus_origine(ecriture=(methode == "POST"))
@@ -819,6 +840,12 @@ class Handler(BaseHTTPRequestHandler):
                                                      "(ajoute-le dans SITES de serveur_recettes.py)"}, 400)
                 n = entier(qs.get("n"), 100, 1, 200)
                 return self.send_json(lister_page(url, n))
+            if u.path == "/api/supprimer":
+                rec = {"url": qs.get("url", "").strip()[:2000], "nom": qs.get("nom", "").strip()[:300],
+                       "source": qs.get("source", "").strip()[:300]}
+                if not (rec["url"] or rec["nom"]):
+                    return self.send_json({"erreur": "Paramètre url ou nom manquant"}, 400)
+                return self.send_json({"supprimees": supprimer_base(rec)})
             if u.path == "/api/recipe":
                 url = qs.get("url", "").strip()
                 if url.startswith(PREFIXE_PDF):

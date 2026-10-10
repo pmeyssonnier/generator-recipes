@@ -19,7 +19,7 @@ en tirer au sort et préparer une liste de courses.
 | Filtres | Texte libre, ingrédients avec / sans, temps max, note minimale, catégorie, favoris |
 | Affichage | 48 recettes à la fois, bouton « Afficher plus » (la page reste fluide avec plusieurs milliers de recettes) |
 | 🎲 Surprends-moi | 3 recettes tirées au hasard parmi les résultats filtrés |
-| Fiche recette | Ingrédients à cocher, étapes, lien vers la source |
+| Fiche recette | Ingrédients à cocher, étapes, lien vers la source, bouton 🗑 Supprimer (de la base du navigateur et de `recettes.json`) |
 | 🛒 Courses | Liste agrégée des ingrédients, copiable |
 | 💾 Export | JSON de toute la base, de la sélection ou des favoris |
 
@@ -139,6 +139,7 @@ generer(charger_base(), avec=["veau"], sans=["crème"], max_min=180)
 navigateur (generateur-recettes.html)
    │  GET  /api/search?q=…   /api/liste?url=…   /api/base   /api/ping
    │  POST /api/recipe?url=…   (importe et enregistre ; en-tête X-Recettes)
+   │  POST /api/supprimer?…    (retire une recette de recettes.json ; en-tête X-Recettes)
    ▼
 serveur_recettes.py  (127.0.0.1:8765)
    │  urllib → site source, 1,5 s minimum entre deux requêtes

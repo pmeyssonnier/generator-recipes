@@ -8,6 +8,11 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Ajouté
+- Bouton **🗑 Supprimer** dans la fiche d'une recette : après confirmation, la recette est retirée de `recettes.json` (nouvelle
+  route `POST /api/supprimer`, avec l'en-tête `X-Recettes`) puis du navigateur, favoris et courses compris. Sans serveur, ou avec un
+  serveur ancien, elle n'est retirée que du navigateur et l'appli le signale. Une base illisible n'est jamais modifiée.
+
 ### Corrigé
 - Réimporter une page de PDF (eFarmz) remplace la recette déjà importée de cette page, même si son titre a changé
   (une ancienne version erronée n'est plus dupliquée à côté de la correcte), dans la base du serveur comme dans l'interface.

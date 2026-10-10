@@ -6,6 +6,7 @@ import sys
 import threading
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 from email.message import Message
 from unittest import mock
@@ -119,6 +120,41 @@ class Serveur(unittest.TestCase):
             code, body = self.get("/api/recipe?url=" + rec["url"], {"X-Recettes": "1"}, "POST")
             self.assertEqual((code, json.loads(body)["nom"]), (200, "A"))
             self.assertEqual([r["nom"] for r in s.lire_base()], ["A"])
+
+    def test_supprimer_une_recette(self):
+        import tempfile
+        a = {"url": "https://www.marmiton.org/recettes/recette_a_1.aspx", "nom": "A", "ingredients": []}
+        b = {"url": "", "nom": "Sans url", "source": "Mamie", "ingredients": []}
+        c = {"url": "", "nom": "Titre doublé titre doublé", "source": "eFarmz · p148.pdf p.2", "ingredients": []}
+        d = {"url": "", "nom": "Autre PDF", "source": "eFarmz · p196.pdf p.2", "ingredients": []}
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(s, "BASE_FILE", os.path.join(t, "r.json")):
+            for r in (a, b, c, d):
+                s.ajouter_base(r)
+            h = {"X-Recettes": "1"}
+            q = lambda **p: "/api/supprimer?" + urllib.parse.urlencode(p)                           # noqa: E731
+            self.assertEqual(self.get(q(url=a["url"], nom="A"), h, "POST")[0], 200)                 # par URL
+            self.assertEqual(json.loads(self.get(q(nom="Sans url"), h, "POST")[1]), {"supprimees": 1})   # par nom
+            # par page de PDF : le titre peut avoir changé depuis l'import
+            self.assertEqual(json.loads(self.get(q(nom="Titre propre", source=c["source"]), h, "POST")[1]), {"supprimees": 1})
+            self.assertEqual([r["nom"] for r in s.lire_base()], ["Autre PDF"])
+            self.assertEqual(json.loads(self.get(q(nom="Inconnue"), h, "POST")[1]), {"supprimees": 0})
+            self.assertEqual(len(s.lire_base()), 1)
+
+    def test_supprimer_exige_post_en_tete_et_parametre(self):
+        self.assertEqual(self.get("/api/supprimer?nom=A", method="POST")[0], 403)                  # sans X-Recettes
+        self.assertEqual(self.get("/api/supprimer?nom=A", {"X-Recettes": "1"})[0], 405)            # GET refusé
+        self.assertEqual(self.get("/api/supprimer", {"X-Recettes": "1"}, "POST")[0], 400)          # rien à supprimer
+        h = {"X-Recettes": "1", "Origin": "http://evil.com"}
+        self.assertEqual(self.get("/api/supprimer?nom=A", h, "POST")[0], 403)                      # origine étrangère
+
+    def test_supprimer_ne_touche_pas_une_base_illisible(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(s, "BASE_FILE", os.path.join(t, "r.json")):
+            with open(s.BASE_FILE, "w", encoding="utf-8") as f:
+                f.write("{pas du json")
+            self.assertEqual(s.supprimer_base({"nom": "A"}), 0)
+            with open(s.BASE_FILE, encoding="utf-8") as f:
+                self.assertEqual(f.read(), "{pas du json")
 
     def test_preflight_post_origine_autorisee(self):
         req = urllib.request.Request(f"http://127.0.0.1:{self.port}/api/recipe", method="OPTIONS", headers={
