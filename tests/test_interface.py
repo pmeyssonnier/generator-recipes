@@ -219,6 +219,39 @@ class Interface(unittest.TestCase):
         self.charger([{"nom": "Filet de poisson", "source": pdf, "ingredients": ["a"]}])
         self.assertEqual(self.noms_affiches(), ["Autre", "Autre 2", "Filet de poisson"])
 
+    def test_supprimer_une_recette(self):
+        """Bouton « Supprimer » de la fiche : confirmation, retrait du navigateur et de recettes.json, favoris compris."""
+        self.ouvrir()
+        self.charger([recette(1), recette(2)])
+        s.ajouter_base(recette(1))                                                            # la base du serveur les contient aussi
+        s.ajouter_base(recette(2))
+        self.page.locator(".card", has_text="Recette 2").locator("[data-fav]").click()      # favori à retirer avec elle
+        self.assertEqual(sorted(r["nom"] for r in s.lire_base()), ["Recette 1", "Recette 2"])
+        self.page.locator(".card", has_text="Recette 2").click()
+        self.page.once("dialog", lambda d: d.dismiss())                                       # annuler : rien ne change
+        self.page.click("#dSuppr")
+        self.assertEqual(self.noms_affiches(), ["Recette 1", "Recette 2"])
+        self.assertEqual(len(s.lire_base()), 2)
+        self.page.once("dialog", lambda d: d.accept())
+        self.page.click("#dSuppr")
+        self.page.wait_for_function("() => document.querySelectorAll('.card').length === 1", polling=100)
+        self.assertEqual(self.noms_affiches(), ["Recette 1"])
+        self.assertEqual([r["nom"] for r in s.lire_base()], ["Recette 1"])                    # aussi dans le fichier du serveur
+        stock = self.page.evaluate(f"JSON.parse(localStorage.getItem('{KEY}'))")
+        self.assertEqual([r["nom"] for r in stock["recettes"]], ["Recette 1"])
+        self.assertEqual(stock["favs"], [])
+        self.assertFalse(self.page.is_visible("#dlgRecette"))
+
+    def test_supprimer_sans_serveur_previent(self):
+        self.ouvrir()
+        self.charger([recette(1), recette(2)])
+        self.page.locator(".card", has_text="Recette 1").click()
+        with mock.patch.object(s, "supprimer_base", side_effect=OSError("disque")):
+            self.page.once("dialog", lambda d: d.accept())
+            self.page.click("#dSuppr")
+            self.page.wait_for_function("() => document.querySelectorAll('.card').length === 1", polling=100)
+        self.assertIn("supprimée du navigateur seulement", self.page.inner_text("body"))
+
     def test_favoris_independants_sans_url(self):
         self.ouvrir()
         self.charger([{"nom": "A sans url", "ingredients": ["a"], "note": 5}, {"nom": "B sans url", "ingredients": ["b"], "note": 4}])

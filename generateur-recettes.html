@@ -30,6 +30,8 @@ button:hover,.btn:hover{border-color:var(--accent)}
 button:disabled{opacity:.5;cursor:wait}
 .primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 .primary:hover{filter:brightness(1.08)}
+.danger{color:var(--ko);border-color:var(--ko)}
+.danger:hover{background:var(--ko-soft);border-color:var(--ko)}
 .badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--accent);color:#fff;font-size:.8rem;text-align:center}
 main{display:grid;grid-template-columns:280px 1fr;gap:20px;padding:20px;max-width:1400px;margin:auto}
 @media (max-width:800px){main{grid-template-columns:1fr;padding:12px}}
@@ -181,6 +183,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   <div class="dlg-foot">
     <a class="btn" id="dLink" target="_blank" rel="noopener">Voir la recette ↗</a>
     <button id="dPanier"></button>
+    <button class="danger" id="dSuppr" title="Retirer cette recette de la base">🗑 Supprimer</button>
     <button class="primary" data-close>Fermer</button>
   </div>
 </dialog>
@@ -763,6 +766,33 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   });
 
   $("dPanier").addEventListener("click", () => { togglePanier(courante); majBoutonPanier(); });
+
+  // Supprime la recette ouverte : de la base du serveur (recettes.json) puis du navigateur, favoris et courses compris.
+  // Sans serveur (ou serveur ancien), elle n'est retirée que du navigateur : on le dit, car le serveur la gardait.
+  $("dSuppr").addEventListener("click", async () => {
+    const r = courante;
+    if (!r || busy) return;
+    if (!confirm(`Supprimer « ${r.nom} » de la base ?\nCette action est définitive.`)) return;
+    busy = true; $("dSuppr").disabled = true;
+    let avertissement = "";
+    try {
+      const q = `url=${encodeURIComponent(r.url || "")}&nom=${encodeURIComponent(r.nom || "")}&source=${encodeURIComponent(r.source || "")}`;
+      await api(`/api/supprimer?${q}`, { post: true });
+    } catch (e) {
+      avertissement = /Route inconnue|HTTP 404|HTTP 405/.test(e.message)
+        ? "serveur ancien : mets-le à jour pour supprimer aussi dans recettes.json"
+        : `${e instanceof TypeError ? "serveur injoignable" : e.message} : supprimée du navigateur seulement`;
+    }
+    const k = cleImport(r);
+    recettes = recettes.filter(x => cleImport(x) !== k);
+    for (const x of [r]) { st.favs.delete(cle(x)); st.panier.delete(cle(x)); }
+    courante = null; indexCourant = -1;
+    $("dlgRecette").close();
+    valider();
+    busy = false; $("dSuppr").disabled = false;
+    toast(avertissement ? `Recette supprimée — ${avertissement}` : "Recette supprimée", avertissement ? 7000 : undefined);
+    ping();
+  });
   $("btnPanier").addEventListener("click", () => { $("txtCourses").value = listeCourses(); $("dlgPanier").showModal(); });
   $("btnViderPanier").addEventListener("click", () => {
     st.panier.clear(); save(); render(); $("txtCourses").value = listeCourses();
