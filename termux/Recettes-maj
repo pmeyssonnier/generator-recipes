@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Met à jour le serveur et la page du générateur de recettes (la base n'est pas touchée)
 DOSSIER="${RECETTES_DOSSIER:-$HOME/storage/downloads/recettes}"
-VERSION="${RECETTES_VERSION:-v1.0.0}"       # pour la dernière version : main
+VERSION="${RECETTES_VERSION:-v1.1.0}"       # pour la dernière version : main
 BASE="https://raw.githubusercontent.com/pmeyssonnier/generator-recipes/$VERSION"
 cd "$DOSSIER" || { echo "Dossier introuvable : $DOSSIER"; read -r -p "Entrée pour fermer"; exit 1; }
 for f in serveur_recettes.py generateur-recettes.html; do

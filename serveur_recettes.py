@@ -31,7 +31,7 @@ BASE = "https://www.marmiton.org"
 PAUSE = 1.5  # secondes minimum entre deux requêtes sortantes
 # Le serveur s'identifie (au lieu d'imiter un navigateur) et applique les règles du robots.txt
 # visant ce nom. Si un site refuse cet identifiant : RECETTES_USER_AGENT="Mozilla/5.0 …"
-VERSION = "1.0.0"       # version de l'application (SemVer) ; voir CHANGELOG.md. Même valeur dans generateur-recettes.html
+VERSION = "1.1.0"       # version de l'application (SemVer) ; voir CHANGELOG.md. Même valeur dans generateur-recettes.html
 API_VERSION = 2          # 2 : l'import se fait en POST (X-Recettes) ; l'interface s'adapte aux serveurs plus anciens
 ROBOTS_NOM = "RecettesPerso"
 USER_AGENT = (os.environ.get("RECETTES_USER_AGENT", "").strip() or
