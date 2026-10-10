@@ -608,13 +608,14 @@ class Handler(BaseHTTPRequestHandler):
         if u.path in ("/", "/index.html") or u.path.lstrip("/") in NOMS_PAGE:
             page = trouver_page()
             if not page:
-                fichiers = "\n".join(sorted(os.listdir(DIR))) or "(dossier vide)"
+                local = self.client_address[0] in ("127.0.0.1", "::1")      # détails réservés au poste lui-même
+                fichiers = "\n".join(sorted(os.listdir(DIR))) or "(dossier vide)" if local else ""
+                details = (f"<p>Dossier du serveur : <code>{html.escape(DIR)}</code></p>"
+                           f"<p>Contenu :</p><pre>{html.escape(fichiers)}</pre>") if local else ""
                 return self.send_html(
                     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-                    "<h2>Page du générateur introuvable</h2>"
-                    f"<p>Dossier du serveur : <code>{html.escape(DIR)}</code></p>"
-                    f"<p>Contenu :</p><pre>{html.escape(fichiers)}</pre>"
-                    "<p>Place <b>generateur-recettes.html</b> dans ce dossier puis recharge.</p>", 404)
+                    "<h2>Page du générateur introuvable</h2>" + details +
+                    "<p>Place <b>generateur-recettes.html</b> dans le dossier du serveur puis recharge.</p>", 404)
             with open(os.path.join(DIR, page), "rb") as f:
                 body = f.read()
             self.send_response(200)
@@ -661,7 +662,8 @@ class Handler(BaseHTTPRequestHandler):
         qs = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
             if u.path == "/api/ping":
-                return self.send_json({"ok": True, "api": API_VERSION, "base": len(lire_base()), "fichier": BASE_FILE})
+                return self.send_json({"ok": True, "api": API_VERSION, "base": len(lire_base()),
+                                       "fichier": os.path.basename(BASE_FILE)})
             if u.path == "/api/base":
                 base = lire_base()
                 for r in base:
@@ -707,8 +709,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"erreur": f"Réseau : {e.reason}"}, 502)
         except TimeoutError:
             self.send_json({"erreur": "Le site met trop de temps à répondre"}, 504)
-        except Exception as e:
+        except ValueError as e:                  # messages écrits par ce serveur (ex. « Pas de données Recipe »)
             self.send_json({"erreur": str(e)}, 500)
+        except Exception as e:                   # le détail (chemins, système…) reste dans la fenêtre du serveur
+            print(f"   ⚠ Erreur interne sur {u.path} : {type(e).__name__} : {e}")
+            self.send_json({"erreur": "Erreur interne du serveur (détails dans sa fenêtre)"}, 500)
 
 
 # ---------------- Lancement ----------------

@@ -63,6 +63,10 @@ une base chargée via **📂 Charger JSON**. Pour importer depuis une page ouver
   La page en ligne (GitHub Pages) se met à jour seule : face à un serveur local plus ancien (sans
   `POST`), elle se rabat sur l'ancien `GET` et affiche « serveur ancien » — mets-le alors à jour
   (`git pull`, puis relance-le) pour bénéficier de la protection renforcée.
+- `/api/ping` ne révèle que le nom du fichier de la base (pas son chemin) ; les erreurs internes
+  renvoient un message générique (le détail reste dans la fenêtre du serveur).
+- Un fichier JSON importé est limité à 25 Mo (par chargement) ; si le stockage du navigateur
+  (≈ 5 Mo) est plein, une alerte invite à exporter la base.
 - Les pages téléchargées sont limitées à 5 Mo (compressées comme décompressées) et 200 pages
   restent en mémoire au maximum.
 - La page applique une politique CSP, n'accepte que des URL `http(s)` pour les liens et images
