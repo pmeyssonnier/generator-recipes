@@ -86,7 +86,7 @@ class ScriptsTermux(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(self.dossier)),
                          ["generateur-recettes.html", "pdf_recettes.py", "recettes_marmiton.json", "serveur_recettes.py"],
                          "aucun reste .tmp")
-        self.assertTrue(all("/v1.0.0/" in u for u in self.journal_lignes()), "version par défaut épinglée")
+        self.assertTrue(all("/v1.1.0/" in u for u in self.journal_lignes()), "version par défaut épinglée")
         self.assertIn("serveur_recettes ", r.stdout)                    # --version affichée
 
     def test_maj_version_au_choix(self):

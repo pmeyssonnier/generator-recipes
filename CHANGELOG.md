@@ -8,6 +8,8 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.1.0] - 2026-10-10
+
 ### Ajouté
 - Source **eFarmz (PDF)** dans la fenêtre d'import : lit les PDF de fiches recettes déposés dans le dossier `eFarmz/`
   (quantités pour N personnes, durées, ingrédients, étapes, photo), montre l'extraction étape par étape avec
@@ -15,7 +17,6 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
   (utilisable seul : `python pdf_recettes.py fichier.pdf`) ; dépendance facultative : `pdfplumber`.
 - Scripts Termux (`termux/`) : `Recettes` (lancement), `Recettes-maj` (mise à jour du serveur et de la page,
   sans toucher à la base) et un installateur pour le widget Termux:Widget et les commandes `recettes` / `recettes-maj`.
-
 - L'interface accepte les images intégrées (`data:image/jpeg|png|webp|gif;base64`), par exemple la photo extraite
   d'un PDF de recettes ; tout autre `data:` (SVG, HTML…) reste refusé.
 
@@ -79,5 +80,6 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.0.0...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.1.0
 [1.0.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.0.0

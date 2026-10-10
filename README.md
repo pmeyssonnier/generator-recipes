@@ -115,7 +115,7 @@ Elle crée `~/.shortcuts/Recettes` et `~/.shortcuts/Recettes-maj`, et les comman
 d'accueil**, installe l'application *Termux:Widget* (même source que Termux, par exemple F-Droid), puis
 ajoute un widget « Termux shortcut ». Le dossier des recettes par défaut est
 `~/storage/downloads/recettes` ; `RECETTES_DOSSIER=…` en choisit un autre, et `RECETTES_VERSION=main`
-(ou un numéro, par exemple `v1.0.0`, la valeur par défaut) la version téléchargée par `Recettes-maj`.
+(ou un numéro, par exemple `v1.1.0`, la valeur par défaut) la version téléchargée par `Recettes-maj`.
 Ces scripts exécutent du code téléchargé depuis ce dépôt : relis-les avant de les installer.
 
 ### Google Colab
