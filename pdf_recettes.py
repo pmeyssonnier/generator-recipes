@@ -40,6 +40,7 @@ UNITES_CUILLERE = {"càs": "c. à soupe", "cas": "c. à soupe", "càc": "c. à c
 UNITES_NOMBRE = {"pc", "pcs", "pièce", "pièces", "piece", "pieces"}
 UNITES_AUTRES = {"gousse": "gousse", "gousses": "gousse", "pincée": "pincée", "pincee": "pincée",
                  "botte": "botte", "branche": "branche", "tranche": "tranche", "sachet": "sachet"}
+UNITES_CONNUES = UNITES_POIDS | set(UNITES_CUILLERE) | UNITES_NOMBRE | set(UNITES_AUTRES)
 H_ASPIRES = ("haricot", "homard", "hareng", "hachis", "houmous", "hamburger", "hibiscus")
 FRACTIONS = {"½": 0.5, "¼": 0.25, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3}
 RE_NOMBRE = re.compile(r"^(\d+(?:[.,]\d+)?|\d*[½¼¾⅓⅔]|\d+/\d+)$")
@@ -169,7 +170,7 @@ def lire_page(page, numero, fichier, personnes):
     # frontière entre le panneau de gauche (durées, tableau) et la colonne de droite (titre, étapes) :
     # le grand rectangle de fond s'il existe, sinon le bord de la dernière colonne du tableau
     fonds = [r for r in page.rects if r["width"] > page.width * 0.25 and r["height"] > page.height * 0.5
-             and r["x0"] < page.width * 0.1]
+             and r["x0"] < page.bbox[0] + page.width * 0.1]
     frontiere = max(r["x1"] for r in fonds) if fonds else x_max + ecart / 2
     gauche = [m for m in mots if m["x0"] < frontiere]
     droite = [m for m in mots if m["x0"] >= frontiere]
@@ -213,9 +214,12 @@ def lire_page(page, numero, fichier, personnes):
     x_premiere = min(colonnes.values())
     taille_texte = taille_dominante(zone)
     ingredients = []
+    pas_puces = [y["top"] - x["top"] for x, y in zip(puces, puces[1:])]
+    hauteur_max = max(pas_puces, default=30)                       # hauteur du plus long libellé (lignes repliées)
     for i, puce in enumerate(puces):
         haut = puce["top"] - 4
-        bas = puces[i + 1]["top"] - 4 if i + 1 < len(puces) else bas_tableau
+        # dernier ingrédient : on s'arrête avant le texte qui suit le tableau (code QR, remarques…)
+        bas = puces[i + 1]["top"] - 4 if i + 1 < len(puces) else min(bas_tableau, puce["top"] + hauteur_max)
         bloc = [m for m in zone if haut <= m["top"] < bas]
         etiquette = [m for m in bloc if (m["x0"] + m["x1"]) / 2 < x_premiere - ecart / 2]
         nombres = [m for m in bloc if (m["x0"] + m["x1"]) / 2 >= x_premiere - ecart / 2 and RE_NOMBRE.match(m["text"])]
@@ -237,7 +241,7 @@ def lire_page(page, numero, fichier, personnes):
         texte = " ".join(morceaux)
         unite = ""
         m = re.search(r"\(([^()]{1,10})\)\s*$", texte)
-        if m and qte:
+        if m and (qte or m.group(1).strip().lower() in UNITES_CONNUES):    # « Sucre (càc) » sans quantité : « Sucre »
             unite = m.group(1).strip().lower()
             texte = texte[:m.start()].strip()
         texte = re.sub(r"(\w)- (\w)", r"\1\2", texte)             # coupure de mot en fin de ligne
@@ -251,7 +255,7 @@ def lire_page(page, numero, fichier, personnes):
         alertes.append("aucun ingrédient lu dans le tableau")
 
     # --- colonne de droite : titre (grande police) puis étapes numérotées
-    corps = taille_dominante([m for m in droite if m["top"] < page.height * 0.9])     # sans le pied de page
+    corps = taille_dominante([m for m in droite if m["top"] < page.bbox[1] + page.height * 0.9])     # sans le pied de page
     titre = phrase(" ".join(ln["texte"] for ln in lignes([m for m in droite if m["size"] >= corps * 1.4])))
     texte_etapes = [m for m in droite if corps * 0.9 <= m["size"] <= corps * 1.15]     # exclut le pied de page
     etapes, courant, num_attendu = [], None, 1
@@ -284,23 +288,50 @@ def lire_page(page, numero, fichier, personnes):
             "ingredients": ingredients, "etapes": etapes}, alertes
 
 
+# ---------- Zone visible de la page ----------
+def zone_visible(page):
+    """(x0, haut, x1, bas) de la zone réellement affichée (CropBox du PDF), en coordonnées pdfplumber.
+    Certains PDF (planche découpée en deux, par exemple) gardent hors de cette zone un double du contenu."""
+    cx0, cy0, cx1, cy1 = page.cropbox
+    mx0, _my0, _mx1, my1 = page.mediabox
+    x0, haut, x1, bas = max(cx0 - mx0, 0), my1 - cy1, min(cx1 - mx0, page.width), my1 - cy0
+    if page.rotation or x1 - x0 < 10 or bas - haut < 10:
+        return (0, 0, page.width, page.height)
+    return (x0, max(haut, 0), x1, min(bas, page.height))
+
+
+def page_visible(page):
+    """La page réduite à sa zone visible (le texte et les images cachés sont ignorés)."""
+    zone = zone_visible(page)
+    return page if zone == (0, 0, page.width, page.height) else page.crop(zone)
+
+
 # ---------- Image d'illustration ----------
 def image_de_page(page, largeur=IMAGE_LARGEUR, qualite=IMAGE_QUALITE):
-    """Plus grande image de la page (au moins 8 % de sa surface), rendue en JPEG « data: » ; None s'il n'y en a pas."""
-    surface = page.width * page.height
-    aire = lambda im: (im["x1"] - im["x0"]) * (im["bottom"] - im["top"])
-    candidates = [im for im in page.images if aire(im) >= 0.08 * surface]
-    if not candidates:
-        return None
-    im = max(candidates, key=aire)
-    zone = (max(im["x0"], 0), max(im["top"], 0), min(im["x1"], page.width), min(im["bottom"], page.height))
-    if zone[2] - zone[0] < 10 or zone[3] - zone[1] < 10:
-        return None
-    dpi = max(36, min(300, largeur / ((zone[2] - zone[0]) / 72)))
-    rendu = page.crop(zone).to_image(resolution=dpi).original.convert("RGB")
-    tampon = io.BytesIO()
-    rendu.save(tampon, "JPEG", quality=qualite, optimize=True)
-    return "data:image/jpeg;base64," + base64.b64encode(tampon.getvalue()).decode("ascii")
+    """Plus grande image visible de la page (au moins 8 % de sa surface), en JPEG « data: » ;
+    None s'il n'y en a pas, ou si elle s'affiche vide (hors de la zone visible)."""
+    from PIL import ImageStat
+    vx0, vhaut, vx1, vbas = zone_visible(page)
+    surface = (vx1 - vx0) * (vbas - vhaut)
+    candidates = []
+    for im in page.images:
+        zone = (max(im["x0"], vx0), max(im["top"], vhaut), min(im["x1"], vx1), min(im["bottom"], vbas))
+        aire = (zone[2] - zone[0]) * (zone[3] - zone[1])
+        if zone[2] - zone[0] >= 10 and zone[3] - zone[1] >= 10 and aire >= 0.08 * surface:
+            candidates.append((aire, zone))
+    for _aire, zone in sorted(candidates, reverse=True):
+        dpi = max(36, min(300, largeur / ((zone[2] - zone[0]) / 72)))
+        rendu = page.to_image(resolution=dpi).original.convert("RGB")     # la page telle qu'affichée (zone visible)
+        echelle = rendu.width / (vx1 - vx0)
+        boite = tuple(round(v) for v in ((zone[0] - vx0) * echelle, (zone[1] - vhaut) * echelle,
+                                         (zone[2] - vx0) * echelle, (zone[3] - vhaut) * echelle))
+        vignette = rendu.crop(boite)
+        if max(ImageStat.Stat(vignette).stddev) < 2:                      # image noire / unie : pas une vraie photo
+            continue
+        tampon = io.BytesIO()
+        vignette.save(tampon, "JPEG", quality=qualite, optimize=True)
+        return "data:image/jpeg;base64," + base64.b64encode(tampon.getvalue()).decode("ascii")
+    return None
 
 
 # ---------- Programme ----------
@@ -321,10 +352,10 @@ def convertir(chemin, personnes=PERSONNES, avec_images=None):
         pages = list(pdf.pages)
         if len(pages) > MAX_PAGES:
             raise ValueError(f"PDF trop long ({len(pages)} pages, maximum {MAX_PAGES})")
-        if sum(len(p.extract_text() or "") for p in pages) < 20 * len(pages):
+        if sum(len(page_visible(p).extract_text() or "") for p in pages) < 20 * len(pages):
             raise ValueError("PDF sans texte (scan ou images seules) : l'OCR n'est pas pris en charge")
         fichier = re.split(r"[\\/]", chemin)[-1]
-        lues = [lire_page(page, numero, fichier, personnes) for numero, page in enumerate(pages, 1)]
+        lues = [lire_page(page_visible(page), numero, fichier, personnes) for numero, page in enumerate(pages, 1)]
         for i, resultat in enumerate(lues):
             if resultat is None:
                 continue                                       # page photo / couverture : pas une recette

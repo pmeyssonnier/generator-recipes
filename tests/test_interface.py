@@ -301,18 +301,19 @@ class Interface(unittest.TestCase):
         self.assertEqual(self.page.inner_text("#impSearch"), "Lire les PDF")
         self.assertTrue(self.page.is_hidden("#impN") and self.page.is_visible("#impPers"))
         self.page.click("#impSearch")                                        # aucun mot-clé nécessaire
-        self.page.wait_for_function("() => document.querySelectorAll('#impRes input').length === 3", polling=100)
-        self.attendre_journal("3 recettes extraite")
+        self.page.wait_for_function("() => document.querySelectorAll('#impRes input').length === 4", polling=100)
+        self.attendre_journal("4 recettes extraite")
         journal = self.page.inner_text("#impLog")
-        self.assertIn("📄 v375.pdf : 3 recette(s) lue(s)", journal)
+        self.assertIn("📄 v375.pdf : 4 recette(s) lue(s)", journal)
         self.assertIn("✓ Steak de bœuf et frites de patates douces (p.2) — 10 ingrédients, 6 étapes, photo p.1", journal)
         self.assertIn("⚠ Œufs cocotte (p.4)", journal)                       # alerte d'extraction visible
-        self.assertEqual(self.page.locator("#impRes img").count(), 3)         # miniatures
+        self.assertEqual(self.page.locator("#impRes img").count(), 4)         # miniatures
         self.page.locator("#impRes details").first.locator("summary").click()
         self.assertIn("Ingrédients", self.page.locator("#impRes details").first.inner_text())     # aperçu du contenu extrait
         cases = self.page.locator("#impRes input")
         cases.nth(0).uncheck()
-        cases.nth(2).uncheck()                                                # seule « Œufs cocotte » reste cochée
+        cases.nth(2).uncheck()
+        cases.nth(3).uncheck()                                                # seule « Œufs cocotte » reste cochée
         self.page.click("#impGo")
         self.attendre_journal("Terminé : 1/1")
         self.assertIn("[1/1] ✓ Œufs cocotte", self.page.inner_text("#impLog"))
@@ -323,8 +324,8 @@ class Interface(unittest.TestCase):
         self.assertEqual([r["nom"] for r in s.lire_base()], ["Œufs cocotte"])  # et sauvegardée côté serveur
         self.page.click("#btnImport")                                         # relire : « déjà en base »
         self.page.click("#impSearch")
-        self.page.wait_for_function("() => document.querySelectorAll('#impRes input').length === 3", polling=100)
-        self.assertEqual(self.page.locator("#impRes input:checked").count(), 2)
+        self.page.wait_for_function("() => document.querySelectorAll('#impRes input').length === 4", polling=100)
+        self.assertEqual(self.page.locator("#impRes input:checked").count(), 3)
         self.assertIn("déjà en base", self.page.inner_text("#impRes"))
 
     def test_filtres_sur_recettes_importees(self):

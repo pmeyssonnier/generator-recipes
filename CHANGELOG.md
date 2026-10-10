@@ -8,6 +8,13 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Corrigé
+- Source eFarmz (PDF) : certains PDF (planche découpée en deux, `CropBox` plus petite que la page) gardent hors de la
+  zone visible un double du contenu : la photo choisie s'affichait noire, les étapes et le titre étaient doublés.
+  Seule la zone visible est lue, et une photo vide est écartée.
+- Un ingrédient sans quantité n'affiche plus son unité (« Sucre (càc) » → « Sucre »), et le texte qui suit le tableau
+  (code QR…) n'est plus ajouté au dernier ingrédient.
+
 ## [1.1.0] - 2026-10-10
 
 ### Ajouté
