@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:           # lancement manuel (onglet Actions)
 
 permissions:
   contents: read
@@ -28,16 +29,24 @@ jobs:
         run: python -m unittest discover -s tests -v
 
   interface:
-    name: tests de l'interface (Chromium)
+    name: interface (${{ matrix.navigateur }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        navigateur: [chromium, firefox, webkit]       # webkit = moteur de Safari
+    env:
+      RECETTES_NAVIGATEUR: ${{ matrix.navigateur }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Installer Playwright et Chromium
+      - name: Installer Playwright et le navigateur
         run: |
           python -m pip install playwright
-          python -m playwright install --with-deps chromium
+          python -m playwright install --with-deps ${{ matrix.navigateur }}
+      - name: Nom d'hôte de test (monpc.local)
+        run: echo "127.0.0.1 monpc.local" | sudo tee -a /etc/hosts
       - name: Tests de l'interface
         run: python -m unittest tests.test_interface -v

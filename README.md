@@ -81,6 +81,11 @@ exporter et faire la liste de courses. GitHub Pages ne peut pas exécuter Python
 l'**import** de recettes, lance `serveur_recettes.py` sur le même appareil (PC ou Termux),
 la page en ligne l'utilisera automatiquement via `http://localhost:8765`.
 
+> **Safari :** une page `https` (GitHub Pages) qui appelle un serveur en `http://localhost` est du
+> « contenu mixte », que Safari peut refuser (non vérifié ici : les tests tournent sur des pages
+> `http`). Si l'import ne fonctionne pas sous Safari, ouvre plutôt <http://localhost:8765/>, la page
+> servie par le serveur lui-même : elle marche dans tous les navigateurs.
+
 Les recettes, favoris et panier restent dans le navigateur de chaque appareil.
 
 ### Android (Termux)
@@ -150,6 +155,17 @@ Pour vérifier que les sources répondent encore (après une mise à jour d'un s
 python tester_sources.py            # ou : python tester_sources.py quiche
 ```
 
+## Navigateurs
+
+La page utilise `<dialog>`, `:focus-visible` et `aspect-ratio`, ce qui suppose un navigateur récent :
+Chrome / Edge 99+, Firefox 98+, Safari 15.4+ (minimum déduit des fonctions utilisées). Les tests de
+l'interface tournent en CI sur Chromium, Firefox et WebKit (le moteur de Safari), dans leur version
+actuelle. Sous Safari sur Mac, la touche Tab n'atteint les boutons que si l'option « Tab met en
+évidence chaque élément » est activée (Réglages Safari › Avancé) : c'est un réglage du navigateur.
+
+Pour Safari, le parcours *page en ligne → serveur local* n'est pas couvert par les tests (voir la
+note dans « Version en ligne ») ; la page servie par le serveur (`http://localhost:8765/`) l'est.
+
 ## Tests
 
 ```bash
@@ -165,8 +181,9 @@ le clavier, la pagination, les fichiers volumineux, le stockage plein, un nom d'
 compatibilité avec un ancien serveur. Ils sont ignorés si Playwright n'est pas installé :
 
 ```bash
-pip install playwright && playwright install chromium
-python -m unittest tests.test_interface -v     # RECETTES_CHROMIUM=/chemin/chromium pour un Chromium existant
+pip install playwright && playwright install chromium firefox webkit
+python -m unittest tests.test_interface -v     # RECETTES_NAVIGATEUR=firefox ou webkit (Safari) ; défaut : chromium
+                                               # RECETTES_CHROMIUM=/chemin/chromium pour un Chromium existant
 ```
 
 Ces tests et une vérification `pyflakes` tournent automatiquement sur GitHub Actions
