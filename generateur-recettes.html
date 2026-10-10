@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https: http:; connect-src 'self' http://localhost:8765; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https: http: data:; connect-src 'self' http://localhost:8765; base-uri 'none'; form-action 'none'">
 <title>Générateur de recettes</title>
 <style>
 :root{
@@ -281,6 +281,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const total = r => r.total_min || (((r.prep_min || 0) + (r.cuisson_min || 0)) || null);
   // Seules les URL http(s) sont acceptées (un JSON importé pourrait contenir « javascript: »)
   const urlSure = u => /^https?:\/\//i.test(String(u ?? "").trim()) ? String(u).trim() : "";
+  // Image : URL http(s), ou image intégrée (data:image/jpeg|png|webp|gif;base64, import depuis un PDF)
+  const imageSure = u => /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\/=]+$/i.test(String(u ?? "").trim())
+    ? String(u).trim() : urlSure(u);
   const fmtMin = m => m == null ? "?" : m >= 60 ? `${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")}` : `${m} min`;
   const catOf = r => Array.isArray(r.categorie) ? r.categorie.join(", ") : (r.categorie || "");
   const nettoyerNom = s => String(s || "").replace(/ /g, " ")
@@ -292,7 +295,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   function indexer(r) {
     r.nom = nettoyerNom(r.nom);
     r.url = urlSure(r.url);
-    r.image = urlSure(r.image);
+    r.image = imageSure(r.image);
     if (!r.source && r.url) { try { r.source = new URL(r.url).hostname.replace(/^www\./, ""); } catch {} }
     r._ing = norm((r.ingredients || []).join(" | "));
     r._txt = norm([r.nom, catOf(r), r.cuisine, r.mots_cles, r.source].flat().join(" "));

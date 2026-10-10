@@ -12,6 +12,9 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 - Scripts Termux (`termux/`) : `Recettes` (lancement), `Recettes-maj` (mise à jour du serveur et de la page,
   sans toucher à la base) et un installateur pour le widget Termux:Widget et les commandes `recettes` / `recettes-maj`.
 
+- L'interface accepte les images intégrées (`data:image/jpeg|png|webp|gif;base64`), par exemple la photo extraite
+  d'un PDF de recettes ; tout autre `data:` (SVG, HTML…) reste refusé.
+
 ### Modifié
 - Le workflow de release laisse telle quelle une release déjà créée à la main au lieu d'échouer.
 

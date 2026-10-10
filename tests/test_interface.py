@@ -196,6 +196,16 @@ class Interface(unittest.TestCase):
         self.assertEqual(self.page.get_attribute("#dLink", "href"), "#")
         self.assertEqual(self.page.eval_on_selector("#dLink", "e => e.style.display"), "none")
 
+    def test_image_integree_d_un_pdf(self):
+        """Une image « data:image/png;base64 » (import depuis un PDF) s'affiche ; un data: dangereux est refusé."""
+        png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=="
+        self.ouvrir()
+        self.charger([{"nom": "Avec photo", "image": png, "ingredients": ["a"]},
+                      {"nom": "Piège svg", "image": "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=", "ingredients": ["b"]},
+                      {"nom": "Piège html", "image": "data:text/html;base64,PGI+", "ingredients": ["c"]}])
+        self.assertEqual(self.page.eval_on_selector_all(".card img", "els => els.map(e => e.getAttribute('src'))"), [png])
+        self.page.wait_for_function("() => [...document.querySelectorAll('.card img')].every(i => i.complete && i.naturalWidth === 1)")
+
     def test_favoris_independants_sans_url(self):
         self.ouvrir()
         self.charger([{"nom": "A sans url", "ingredients": ["a"], "note": 5}, {"nom": "B sans url", "ingredients": ["b"], "note": 4}])
