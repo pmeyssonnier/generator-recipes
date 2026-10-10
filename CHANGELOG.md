@@ -8,6 +8,8 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.2.0] - 2026-10-10
+
 ### Ajouté
 - Bouton **🗑 Supprimer** dans la fiche d'une recette : après confirmation, la recette est retirée de `recettes.json` (nouvelle
   route `POST /api/supprimer`, avec l'en-tête `X-Recettes`) puis du navigateur, favoris et courses compris. Sans serveur, ou avec un
@@ -104,7 +106,8 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.1.1...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.2.0
 [1.1.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.1.1
 [1.1.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.1.0
 [1.0.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.0.0
