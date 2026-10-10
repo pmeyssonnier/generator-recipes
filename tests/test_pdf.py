@@ -25,14 +25,32 @@ class Extraction(unittest.TestCase):
     def test_trois_recettes_avec_photo(self):
         recettes, rapport = pdf.convertir(FICHES, 2)
         self.assertEqual([r["nom"] for r in recettes],
-                         ["Steak de bœuf et frites de patates douces", "Œufs cocotte", "Salade verte"])
+                         ["Steak de bœuf et frites de patates douces", "Œufs cocotte", "Salade verte", "Filet de poisson"])
         steak = recettes[0]
         self.assertEqual((len(steak["ingredients"]), len(steak["etapes"])), (10, 6))
         self.assertEqual((steak["prep_min"], steak["cuisson_min"]), (20, 35))
         self.assertEqual(steak["portions"], "2 personnes")
         self.assertTrue(steak["image"].startswith("data:image/jpeg;base64,"))
-        self.assertEqual([n for n, _, _ in rapport], [2, 4, 6])                 # pages de détail
-        self.assertEqual([r["image_page"] for r in recettes], [1, 3, 5])        # photo = page qui précède
+        self.assertEqual([n for n, _, _ in rapport], [2, 4, 6, 8])             # pages de détail
+        self.assertEqual([r["image_page"] for r in recettes], [1, 3, 5, 7])     # photo = page qui précède
+
+    def test_planche_decoupee_zone_visible_seulement(self):
+        """CropBox plus petite que la page : le double caché du texte et de la photo est ignoré."""
+        poisson = pdf.convertir(FICHES, 2)[0][3]
+        self.assertEqual(poisson["nom"], "Filet de poisson")                     # pas de titre doublé
+        self.assertEqual(len(poisson["etapes"]), 2)                              # pas d'étapes doublées
+        self.assertEqual((poisson["prep_min"], poisson["cuisson_min"]), (15, 30))
+        self.assertEqual(poisson["ingredients"], ["2 poisson", "Sucre (non fourni)", "Sel et poivre (non fourni)"])
+        # ni l'unité « (càc) » sans quantité, ni le texte du code QR, ne restent dans les ingrédients
+        self.assertTrue(poisson["image"].startswith("data:image/jpeg;base64,"))
+
+    def test_photo_jamais_noire(self):
+        from io import BytesIO
+        import base64
+        from PIL import ImageStat, Image
+        for r in pdf.convertir(FICHES, 2)[0]:
+            im = Image.open(BytesIO(base64.b64decode(r["image"].split(",", 1)[1])))
+            self.assertGreater(max(ImageStat.Stat(im).stddev), 2, f"photo vide pour {r['nom']}")
 
     def test_nombre_de_personnes(self):
         deux = pdf.convertir(FICHES, 2)[0][0]["ingredients"]
@@ -94,9 +112,9 @@ class SourceEfarmz(unittest.TestCase):
     def test_lecture_du_dossier_sans_mot_cle(self):
         code, res = self.requete("/api/search?source=efarmz")
         self.assertEqual(code, 200)
-        self.assertIn("3 recette(s) lue(s)", res[0]["titre"])                    # ligne d'information sur le PDF
+        self.assertIn("4 recette(s) lue(s)", res[0]["titre"])                    # ligne d'information sur le PDF
         recettes = [x for x in res if x["url"]]
-        self.assertEqual([x["url"] for x in recettes], [f"efarmz:v375.pdf#{p}" for p in (2, 4, 6)])
+        self.assertEqual([x["url"] for x in recettes], [f"efarmz:v375.pdf#{p}" for p in (2, 4, 6, 8)])
         self.assertIn("10 ingrédients, 6 étapes", recettes[0]["detail"])
         self.assertTrue(recettes[0]["image"].startswith("data:image/jpeg"))
         self.assertTrue(recettes[1]["alertes"])                                  # durées incomplètes signalées
@@ -115,7 +133,7 @@ class SourceEfarmz(unittest.TestCase):
         with open(os.path.join(self.dossier, "casse.pdf"), "wb") as f:
             f.write(b"%PDF-1.4 tronque")
         res = self.requete("/api/search?source=efarmz")[1]
-        self.assertEqual(len([x for x in res if x["url"]]), 3)
+        self.assertEqual(len([x for x in res if x["url"]]), 4)
         self.assertTrue(any(x.get("erreur") and "casse.pdf" in x["titre"] for x in res))
 
     def test_import_ajoute_a_la_base_avec_la_photo(self):

@@ -1,4 +1,4 @@
-"""Génère tests/fixtures/fiches.pdf (3 fiches recettes synthétiques avec photo). Outil de développement :
+"""Génère tests/fixtures/fiches.pdf (4 fiches recettes synthétiques avec photo). Outil de développement :
 pip install reportlab pillow ; python tests/fixtures/generer_pdf.py — le PDF produit est versionné.
 Reproduit la mise en page d'une fiche : page photo, puis page de détail (durées, tableau 1p…6p, étapes)."""
 import os
@@ -33,7 +33,8 @@ def page_photo(c, titre):
     c.setFillColorRGB(1, 1, 1); mot(c, 40, 60, titre, 30, True); c.showPage()
 
 
-def page_detail(c, titre_lignes, durees, ustensiles, conservation, colonnes, lignes_tab, notes, etapes, pied=True):
+def page_detail(c, titre_lignes, durees, ustensiles, conservation, colonnes, lignes_tab, notes, etapes, pied=True,
+                bloc_qr=None, fin=True):
     c.setFillColorRGB(0.07, 0.3, 0.27); c.rect(10, 20, 340, H - 40, fill=1, stroke=0)
     c.setFillColorRGB(1, 1, 1)
     y = 540
@@ -52,6 +53,8 @@ def page_detail(c, titre_lignes, durees, ustensiles, conservation, colonnes, lig
             ligne_etiquette(c, 25, y0 - dy, segs)
         for (n, x), v in zip(xs.items(), valeurs):
             mot(c, x - 5, y0 - y_val, v, 9)
+    for i, n in enumerate(bloc_qr or []):                      # texte du code QR, sous le tableau
+        mot(c, 95, 92 - 11 * i, n, 8)
     for i, n in enumerate(notes):
         mot(c, 25, 40 - 9 * i, n, 7)
     c.setFillColorRGB(0, 0, 0)
@@ -66,7 +69,8 @@ def page_detail(c, titre_lignes, durees, ustensiles, conservation, colonnes, lig
         y -= 8
     if pied:
         mot(c, 400, 40, "Tous les produits sont certifiés bio sauf indication contraire.", 7)
-    c.showPage()
+    if fin:
+        c.showPage()
 
 
 def recette_steak(c):
@@ -109,6 +113,34 @@ def recette_deux_colonnes(c):
                 [["Préchauffez le four à 180°C."], ["Cassez les oeufs dans des ramequins."], ["Enfournez 10 min."]])
 
 
+def recette_planche_decoupee(c):
+    """Comme certains PDF eFarmz : la page est deux fois trop haute, seule sa moitié basse est visible (CropBox)
+    et le contenu (texte, photo) est répété dans la moitié haute, cachée."""
+    from PIL import Image
+    Image.linear_gradient("L").resize((600, 400)).convert("RGB").save("/tmp/photo_fixture.png")
+    N = lambda t: (t, "n")
+    tab = [
+        ([(0, [N("•"), N("Poisson"), N("(pc)")])], 395, ["2", "3", "4"], 0),
+        ([(0, [N("•"), N("Sucre"), (("(1)"), "e"), N("(càc)")])], 360, [], 0),
+        ([(0, [N("•"), N("Sel"), N("et"), N("poivre"), (("(1)"), "e")])], 335, [], 0),
+    ]
+    etapes = [["Préchauffez le four à 170°C."], ["Enfournez le poisson 10 min."]]
+    for decalage in (0, H):                                   # d'abord la copie visible, puis la copie cachée
+        c.setPageSize((W, 2 * H))
+        c.saveState(); c.translate(0, decalage)
+        c.setFillColorRGB(0.8, 0.6, 0.3); c.rect(0, 0, W, H, fill=1, stroke=0)
+        c.drawImage("/tmp/photo_fixture.png", 30, 40, width=W - 60, height=H - 80)
+        c.restoreState()
+    c.setCropBox((0, 0, W, H)); c.showPage()
+    c.setPageSize((W, 2 * H))
+    for decalage in (0, H):
+        c.saveState(); c.translate(0, decalage)
+        page_detail(c, ["FILET DE POISSON"], ["15 mn", "30 mn"], ["une poêle"], "", [2, 3, 4], tab,
+                    ["(1) Non fourni dans la box."], etapes, bloc_qr=["Envie d'en savoir plus", "sur ce poisson ?"], fin=False)
+        c.restoreState()
+    c.setCropBox((0, 0, W, H)); c.showPage()
+
+
 def recette_anormale(c):
     page_photo(c, "SALADE")
     N = lambda t: (t, "n")
@@ -118,6 +150,6 @@ def recette_anormale(c):
 
 if __name__ == "__main__":
     c = canvas.Canvas(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fiches.pdf"), pagesize=landscape(A4))
-    recette_steak(c); recette_deux_colonnes(c); recette_anormale(c)
+    recette_steak(c); recette_deux_colonnes(c); recette_anormale(c); recette_planche_decoupee(c)
     c.save()
     print("fiches.pdf écrit")
