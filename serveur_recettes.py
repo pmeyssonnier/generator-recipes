@@ -30,10 +30,11 @@ BASE = "https://www.marmiton.org"
 PAUSE = 1.5  # secondes minimum entre deux requêtes sortantes
 # Le serveur s'identifie (au lieu d'imiter un navigateur) et applique les règles du robots.txt
 # visant ce nom. Si un site refuse cet identifiant : RECETTES_USER_AGENT="Mozilla/5.0 …"
+VERSION = "1.0.0"       # version de l'application (SemVer) ; voir CHANGELOG.md. Même valeur dans generateur-recettes.html
 API_VERSION = 2          # 2 : l'import se fait en POST (X-Recettes) ; l'interface s'adapte aux serveurs plus anciens
 ROBOTS_NOM = "RecettesPerso"
 USER_AGENT = (os.environ.get("RECETTES_USER_AGENT", "").strip() or
-              f"Mozilla/5.0 (compatible; {ROBOTS_NOM}/1.0; +https://github.com/pmeyssonnier/generator-recipes)")
+              f"Mozilla/5.0 (compatible; {ROBOTS_NOM}/{VERSION}; +https://github.com/pmeyssonnier/generator-recipes)")
 MAX_OCTETS = 5 * 1024 * 1024      # taille maximale d'une page téléchargée (après décompression)
 ROBOTS_TTL = 3600                 # secondes de validité d'un robots.txt en mémoire
 HEADERS = {
@@ -662,7 +663,7 @@ class Handler(BaseHTTPRequestHandler):
         qs = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
             if u.path == "/api/ping":
-                return self.send_json({"ok": True, "api": API_VERSION, "base": len(lire_base()),
+                return self.send_json({"ok": True, "version": VERSION, "api": API_VERSION, "base": len(lire_base()),
                                        "fichier": os.path.basename(BASE_FILE)})
             if u.path == "/api/base":
                 base = lire_base()
@@ -740,6 +741,9 @@ def ouvrir_navigateur(url):
 
 
 if __name__ == "__main__":
+    if "--version" in sys.argv:
+        print(f"serveur_recettes {VERSION}")
+        sys.exit(0)
     page = trouver_page()
     if not page:
         print(f"⚠ Aucune page HTML trouvée dans {DIR}")
@@ -750,7 +754,7 @@ if __name__ == "__main__":
                  f"  (serveur déjà lancé ? sinon : RECETTES_PORT=8766 python {os.path.basename(__file__)})")
 
     url = f"http://localhost:{PORT}/"
-    print(f"🍲 Générateur de recettes → {url}")
+    print(f"🍲 Générateur de recettes {VERSION} → {url}")
     if page:
         print(f"   Page : {page}")
     if LAN:

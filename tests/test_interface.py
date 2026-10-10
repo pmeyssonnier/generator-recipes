@@ -330,6 +330,18 @@ class Interface(unittest.TestCase):
     def alertes_toast(self):
         return self.page.eval_on_selector_all("body > div", "els => els.map(e => e.textContent)")
 
+    def test_numero_de_version_affiche(self):
+        version_page = s.VERSION
+        self.ouvrir()
+        self.assertEqual(self.page.inner_text("header h1 .version"), f"v{s.VERSION}")
+        self.page.wait_for_function("() => document.getElementById('srvStatus').title.includes('serveur v')", polling=100)
+        self.assertIn(f"serveur v{s.VERSION}", self.page.get_attribute("#srvStatus", "title"))
+        self.assertNotIn("mets le serveur à jour", self.page.get_attribute("#srvStatus", "title"))   # même version
+        with mock.patch.object(s, "VERSION", "0.9.0"):                                               # serveur plus ancien que la page
+            self.page.reload()
+            self.page.wait_for_function("() => document.getElementById('srvStatus').title.includes('serveur v0.9.0')", polling=100)
+            self.assertIn(f"page v{version_page} : mets le serveur à jour", self.page.get_attribute("#srvStatus", "title"))
+
     def test_dialogue_recette(self):
         self.ouvrir()
         self.charger([recette(1), recette(2)])
