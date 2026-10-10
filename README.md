@@ -186,6 +186,34 @@ refusée avec un message explicite au lieu d'être téléchargée. Il s'identifi
 injoignable ou en erreur 5xx, l'accès est refusé par prudence (RFC 9309) et réessayé à la requête
 suivante. Si un site refuse cet identifiant, `RECETTES_USER_AGENT="Mozilla/5.0 …"` le remplace.
 
+## Versions et releases
+
+Le projet suit le [versionnage sémantique](https://semver.org/lang/fr/) (`MAJEUR.MINEUR.CORRECTIF`).
+La version courante s'affiche dans l'en-tête de la page, dans l'infobulle de l'état du serveur,
+au lancement du serveur et avec `python serveur_recettes.py --version`. Les changements de chaque
+version sont dans [CHANGELOG.md](CHANGELOG.md) ; les releases sont sur la page *Releases* du dépôt.
+
+**Publier une version** (par exemple 1.1.0) :
+
+1. Dans une pull request : changer `VERSION` dans `serveur_recettes.py` **et** dans
+   `generateur-recettes.html` (deux endroits : `const VERSION` et le `<small class="version">`),
+   puis ajouter dans `CHANGELOG.md` la section `## [1.1.0] - AAAA-MM-JJ` (en renommant le contenu
+   de `[Non publié]`) et le lien en bas de fichier. Les tests (`tests/test_version.py`) vérifient
+   que tout est cohérent.
+2. Une fois la PR fusionnée, créer le tag sur `main` :
+
+   ```bash
+   git checkout main && git pull
+   git tag -a v1.1.0 -m "Version 1.1.0"
+   git push origin v1.1.0
+   ```
+
+3. GitHub Actions (`.github/workflows/release.yml`) vérifie que le tag correspond à `VERSION`,
+   lance les tests puis crée la release avec les notes de `CHANGELOG.md`.
+
+`/api/ping` annonce aussi `api`, le numéro de protocole entre la page et le serveur (distinct de la
+version de l'application) : la page en ligne s'en sert pour rester compatible avec un serveur plus ancien.
+
 ## Usage responsable
 
 Projet à usage **personnel**. Les recettes extraites restent la propriété de leurs sites

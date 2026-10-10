@@ -1,0 +1,43 @@
+name: Release
+
+# Pousser un tag « vMAJEUR.MINEUR.CORRECTIF » (ex. v1.0.0) crée la release GitHub :
+# notes tirées de CHANGELOG.md, après vérification que le tag correspond à VERSION.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Le tag correspond à VERSION
+        run: |
+          VERSION=$(python -c "import re; print(re.search(r'^VERSION = \"([^\"]+)\"', open('serveur_recettes.py', encoding='utf-8').read(), re.M).group(1))")
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Le tag $GITHUB_REF_NAME ne correspond pas à VERSION = $VERSION (serveur_recettes.py)"
+            exit 1
+          fi
+      - name: Tests hors ligne
+        run: python -m unittest discover -s tests
+      - name: Notes de version (CHANGELOG.md)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="$VERSION" '/^## \[/ { if (found) exit; if (index($0, "[" v "]")) { found = 1; next } } found && !/^\[[^]]+\]: /' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::Aucune section « ## [$VERSION] » dans CHANGELOG.md"
+            exit 1
+          fi
+          cat notes.md
+      - name: Créer la release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag \
+            --title "Générateur de recettes $GITHUB_REF_NAME" --notes-file notes.md

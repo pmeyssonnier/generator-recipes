@@ -21,6 +21,7 @@ body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;b
 header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
   padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 header h1{font-size:1.25rem;margin:0}
+header h1 .version{font-size:.7rem;font-weight:400;color:var(--muted)}
 header .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .count{color:var(--muted);font-size:.9rem}
 button,.btn{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--text);
@@ -107,7 +108,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 <body>
 
 <header>
-  <h1>🍲 Générateur de recettes</h1>
+  <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.0.0</small></h1>
   <div class="actions">
     <span class="count" id="count">0 recette</span>
     <label class="btn primary" for="file">📂 Charger JSON</label>
@@ -526,13 +527,15 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // Un serveur local ancien (avant le POST) répond 501 / 405 : l'import se rabat alors sur GET,
   // et l'état du serveur indique qu'il faut le mettre à jour (git pull, puis relancer).
   let serveurAncien = false;
-  function badgeServeur(base, fichier) {
+  const VERSION = "1.0.0";                   // version de la page (même valeur que serveur_recettes.py)
+  function badgeServeur(base, fichier, version) {
     const s = $("srvStatus");
     s.className = "srv on";
     s.textContent = serveurAncien ? `● serveur ancien (${base} en base)` : `● serveur (${base} en base)`;
     s.title = serveurAncien
       ? "Serveur Python local ancien : il fonctionne, mais mets-le à jour (git pull) et relance-le pour la protection renforcée"
-      : `Sauvegarde automatique : ${fichier || "recettes.json"}`;
+      : `Sauvegarde automatique : ${fichier || "recettes.json"}` +
+        (version ? ` — serveur v${version}${version !== VERSION ? `, page v${VERSION} : mets le serveur à jour (git pull)` : ""}` : "");
   }
   async function api(path, { post = false } = {}) {
     const API = await apiPrete;
@@ -552,7 +555,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     try {
       const d = await api("/api/ping");
       serveurAncien = (d.api || 1) < 2;
-      badgeServeur(d.base, d.fichier);
+      badgeServeur(d.base, d.fichier, d.version);
       return d;
     } catch {
       s.className = "srv off"; s.textContent = "● hors ligne";

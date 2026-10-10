@@ -105,7 +105,7 @@ def generer(recettes, avec=(), sans=(), max_min=None, n=3):
 if __name__ == "__main__":
     import pandas as pd             # préinstallé sur Colab ; inutile pour les fonctions ci-dessus
 
-    print("Sources de recherche :", ", ".join(srv.SOURCES))
+    print(f"serveur_recettes {srv.VERSION} — sources de recherche :", ", ".join(srv.SOURCES))
     recettes = import_recipes("blanquette", max_results=8)       # source="ptitchef" pour PtitChef
     # import_url("https://www.marmiton.org/recettes/recette_....aspx")
     # import_page("https://www.ricardocuisine.com/...")           # page qui liste plusieurs recettes
