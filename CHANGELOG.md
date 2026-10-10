@@ -8,6 +8,10 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Modifié
+- Termux : `Recettes-maj` télécharge par défaut la **dernière release publiée** (et non une version écrite en dur), et met à jour
+  les scripts `Recettes` et `Recettes-maj` installés dans `~/.shortcuts`. `RECETTES_VERSION` reste possible pour imposer une version.
+
 ## [1.1.1] - 2026-10-10
 
 ### Corrigé
