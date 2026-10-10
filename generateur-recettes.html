@@ -320,17 +320,20 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
 
   // ---------- Import JSON ----------
+  // Identité d'une recette : son URL ; sans URL, la page de PDF d'où elle vient (réimporter la même page la
+  // remplace même si son titre a changé) ; sinon son nom. Même règle que le serveur (cle_recette).
+  const cleImport = r => r.url || (/\.pdf p\.\d+$/i.test(r.source || "") ? "pdf:" + r.source : r.nom);
   // Seules les recettes reçues sont (ré)indexées. Avec differe = true, l'enregistrement
   // et l'affichage sont repoussés : l'appelant termine par valider() (import en lot).
   function importer(data, { differe = false } = {}) {
     const arr = Array.isArray(data) ? data : (data.recettes || [data]);
-    const parUrl = new Map(recettes.map(r => [r.url || r.nom, r]));
+    const parUrl = new Map(recettes.map(r => [cleImport(r), r]));
     const recues = new Set();
     let ajout = 0;
     for (const r of arr) {
       if (!r || !r.nom) continue;
       r.url = urlSure(r.url);
-      const k = r.url || r.nom;
+      const k = cleImport(r);
       if (!parUrl.has(k)) ajout++;
       if (r.favori === true) st.favs.add(cle(r));
       delete r.favori;
@@ -612,11 +615,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 
   function afficherResultats(res) {
     const connues = new Set(recettes.map(r => r.url));
-    const noms = new Set(recettes.map(r => r.nom));
+    const sourcesPdf = new Set(recettes.map(r => r.source));
     $("impRes").innerHTML = res.length ? res.map(x => {
       if (!x.url) return `<li><i class="meta">${esc(x.titre)}</i></li>`;          // ligne d'information (PDF lu, erreur)
       const pdf = !!x.fichier;
-      const deja = connues.has(x.url) || (pdf && noms.has(nettoyerNom(x.titre)));
+      const deja = connues.has(x.url) || (pdf && sourcesPdf.has(`eFarmz · ${x.fichier} p.${x.page}`));
       const miniature = x.image ? `<img src="${esc(imageSure(x.image))}" alt="" width="56" height="42"
         style="object-fit:cover;border-radius:6px;vertical-align:middle">` : "";
       const corps = pdf ? `<details><summary class="meta">${esc(x.detail || "")}${x.alertes?.length ? " · ⚠ " + esc(x.alertes.join(" ; ")) : ""}</summary>
