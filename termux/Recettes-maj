@@ -1,0 +1,16 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Met à jour le serveur et la page du générateur de recettes (la base n'est pas touchée)
+DOSSIER="${RECETTES_DOSSIER:-$HOME/storage/downloads/recettes}"
+VERSION="${RECETTES_VERSION:-v1.0.0}"       # pour la dernière version : main
+BASE="https://raw.githubusercontent.com/pmeyssonnier/generator-recipes/$VERSION"
+cd "$DOSSIER" || { echo "Dossier introuvable : $DOSSIER"; read -r -p "Entrée pour fermer"; exit 1; }
+for f in serveur_recettes.py generateur-recettes.html; do
+  if ! curl -fsSL "$BASE/$f" -o "$f.tmp"; then
+    echo "Échec du téléchargement de $f ($VERSION) : rien n'a été modifié."
+    rm -f serveur_recettes.py.tmp generateur-recettes.html.tmp
+    read -r -p "Entrée pour fermer"; exit 1
+  fi
+done
+mv serveur_recettes.py.tmp serveur_recettes.py && mv generateur-recettes.html.tmp generateur-recettes.html
+echo "Mise à jour terminée :"; python serveur_recettes.py --version
+read -r -p "Entrée pour fermer" || true

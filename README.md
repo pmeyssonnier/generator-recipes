@@ -100,6 +100,24 @@ termux-wake-lock
 python serveur_recettes.py
 ```
 
+#### Raccourcis et mise à jour (Termux)
+
+Le dossier `termux/` fournit deux scripts : **`Recettes`** (lance le serveur, avec `termux-wake-lock`)
+et **`Recettes-maj`** (télécharge `serveur_recettes.py` et `generateur-recettes.html` ; la base n'est
+pas touchée, et rien n'est remplacé si un téléchargement échoue). Installation en une commande :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pmeyssonnier/generator-recipes/main/termux/installer.sh | bash
+```
+
+Elle crée `~/.shortcuts/Recettes` et `~/.shortcuts/Recettes-maj`, et les commandes `recettes` /
+`recettes-maj` (alias dans `~/.bashrc`, après avoir rouvert Termux). Pour un **raccourci sur l'écran
+d'accueil**, installe l'application *Termux:Widget* (même source que Termux, par exemple F-Droid), puis
+ajoute un widget « Termux shortcut ». Le dossier des recettes par défaut est
+`~/storage/downloads/recettes` ; `RECETTES_DOSSIER=…` en choisit un autre, et `RECETTES_VERSION=main`
+(ou un numéro, par exemple `v1.0.0`, la valeur par défaut) la version téléchargée par `Recettes-maj`.
+Ces scripts exécutent du code téléchargé depuis ce dépôt : relis-les avant de les installer.
+
 ### Google Colab
 
 `colab/import_recettes_colab.py` fait l'import en lot dans un notebook. Il télécharge
