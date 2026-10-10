@@ -1,0 +1,8 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Lance le générateur de recettes (serveur local + navigateur)
+DOSSIER="${RECETTES_DOSSIER:-$HOME/storage/downloads/recettes}"   # adapte si ton dossier s'appelle autrement
+cd "$DOSSIER" || { echo "Dossier introuvable : $DOSSIER"; read -r -p "Entrée pour fermer"; exit 1; }
+command -v termux-wake-lock >/dev/null && termux-wake-lock          # garde le serveur actif écran éteint
+trap 'command -v termux-wake-unlock >/dev/null && termux-wake-unlock' EXIT
+python serveur_recettes.py
+echo; read -r -p "Serveur arrêté. Entrée pour fermer" || true

@@ -1,3 +1,6 @@
 # Les scripts Windows doivent garder des fins de ligne CRLF
 *.bat text eol=crlf
 *.cmd text eol=crlf
+
+# Les scripts Termux (shell) doivent garder des fins de ligne LF, même extraits sous Windows
+termux/* text eol=lf

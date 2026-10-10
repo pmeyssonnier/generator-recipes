@@ -8,6 +8,10 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Ajouté
+- Scripts Termux (`termux/`) : `Recettes` (lancement), `Recettes-maj` (mise à jour du serveur et de la page,
+  sans toucher à la base) et un installateur pour le widget Termux:Widget et les commandes `recettes` / `recettes-maj`.
+
 ### Modifié
 - Le workflow de release laisse telle quelle une release déjà créée à la main au lieu d'échouer.
 
