@@ -8,6 +8,9 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Modifié
+- Le workflow de release laisse telle quelle une release déjà créée à la main au lieu d'échouer.
+
 ## [1.0.0] - 2026-10-10
 
 Première version publiée.
