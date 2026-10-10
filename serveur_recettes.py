@@ -429,19 +429,68 @@ def migrer_base(ancien=None, nouveau=None):
     return f"Base renommée : {os.path.basename(ancien)} → {os.path.basename(nouveau)}"
 
 
-def lire_base():
+class BaseCorrompue(Exception):
+    """recettes.json existe mais n'est pas une base de recettes lisible."""
+
+
+def lire_base_brute():
+    """Recettes de recettes.json ([] si le fichier n'existe pas).
+    Lève BaseCorrompue si le fichier est illisible ou n'a pas le bon format ; toute autre erreur
+    d'accès (droits…) se propage telle quelle. Jamais d'écriture ici."""
     try:
         with open(BASE_FILE, encoding="utf-8") as f:
             d = json.load(f)
-        return d if isinstance(d, list) else d.get("recettes", [])
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
         return []
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        raise BaseCorrompue(f"JSON invalide ({e})") from e
+    liste = d.get("recettes") if isinstance(d, dict) else d
+    if not isinstance(liste, list) or not all(isinstance(r, dict) for r in liste):
+        raise BaseCorrompue("format inattendu (liste de recettes attendue)")
+    return liste
+
+
+_base_signalee = set()
+
+
+def lire_base():
+    """Pour l'affichage : [] si la base est corrompue (le fichier n'est pas touché, signalé une fois)."""
+    try:
+        return lire_base_brute()
+    except BaseCorrompue as e:
+        try:
+            marque = os.stat(BASE_FILE).st_mtime_ns
+        except OSError:
+            marque = None
+        if marque not in _base_signalee:
+            _base_signalee.add(marque)
+            print(f"   ⚠ {os.path.basename(BASE_FILE)} est illisible : {e}. "
+                  "Il sera conservé tel quel avant la prochaine écriture.")
+        return []
+
+
+def mettre_de_cote_base(cause):
+    """Renomme la base corrompue en recettes.json.corrompu-AAAAMMJJ-HHMMSS (récupérable à la main)."""
+    horodatage = time.strftime("%Y%m%d-%H%M%S")
+    cible, n = f"{BASE_FILE}.corrompu-{horodatage}", 1
+    while os.path.exists(cible):
+        n += 1
+        cible = f"{BASE_FILE}.corrompu-{horodatage}-{n}"
+    os.replace(BASE_FILE, cible)
+    print(f"   ⚠ {os.path.basename(BASE_FILE)} était illisible ({cause}) : conservé dans "
+          f"{os.path.basename(cible)}, nouvelle base créée.")
+    return cible
 
 
 def ajouter_base(rec):
     with _file_lock:
+        try:
+            existantes = lire_base_brute()
+        except BaseCorrompue as e:
+            mettre_de_cote_base(e)               # jamais d'écrasement du contenu récupérable
+            existantes = []
         base = {}
-        for r in lire_base():
+        for r in existantes:
             r["nom"] = nettoyer_nom(r.get("nom"))      # nettoie aussi les anciens imports
             base[r.get("url") or r.get("nom")] = r
         base[rec["url"]] = rec

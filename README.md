@@ -15,6 +15,7 @@ en tirer au sort et préparer une liste de courses.
 |---|---|
 | Import | Recherche par mot-clé sur Marmiton, ou import par URL depuis les sites de la liste `SITES` |
 | Sauvegarde | Automatique dans `recettes.json` + stockage du navigateur (l'ancien `recettes_marmiton.json` est renommé automatiquement au lancement) |
+| Base illisible | Si `recettes.json` est corrompu, il n'est jamais écrasé : à la prochaine importation il est conservé sous `recettes.json.corrompu-AAAAMMJJ-HHMMSS` (récupérable à la main) et une nouvelle base est créée ; un avertissement s'affiche dans la fenêtre du serveur |
 | Filtres | Texte libre, ingrédients avec / sans, temps max, note minimale, catégorie, favoris |
 | Affichage | 48 recettes à la fois, bouton « Afficher plus » (la page reste fluide avec plusieurs milliers de recettes) |
 | 🎲 Surprends-moi | 3 recettes tirées au hasard parmi les résultats filtrés |
