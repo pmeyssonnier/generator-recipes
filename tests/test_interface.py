@@ -208,6 +208,17 @@ class Interface(unittest.TestCase):
         self.assertEqual(self.page.eval_on_selector_all(".card img", "els => els.map(e => e.getAttribute('src'))"), [png])
         self.page.wait_for_function("() => [...document.querySelectorAll('.card img')].every(i => i.complete && i.naturalWidth === 1)")
 
+    def test_reimport_d_une_page_de_pdf_remplace_l_ancienne_version(self):
+        """Même page de PDF, titre différent (ancienne version erronée) : une seule carte, la plus récente."""
+        self.ouvrir()
+        pdf = "eFarmz · p148.pdf p.2"
+        self.charger([{"nom": "Filet doublé filet doublé", "source": pdf, "ingredients": ["a"]},
+                      {"nom": "Autre", "source": "Mamie", "ingredients": ["b"]},
+                      {"nom": "Autre 2", "source": "Mamie", "ingredients": ["c"]}])
+        self.assertEqual(self.noms_affiches(), ["Autre", "Autre 2", "Filet doublé filet doublé"])
+        self.charger([{"nom": "Filet de poisson", "source": pdf, "ingredients": ["a"]}])
+        self.assertEqual(self.noms_affiches(), ["Autre", "Autre 2", "Filet de poisson"])
+
     def test_favoris_independants_sans_url(self):
         self.ouvrir()
         self.charger([{"nom": "A sans url", "ingredients": ["a"], "note": 5}, {"nom": "B sans url", "ingredients": ["b"], "note": 4}])

@@ -114,8 +114,9 @@ Elle crée `~/.shortcuts/Recettes` et `~/.shortcuts/Recettes-maj`, et les comman
 `recettes-maj` (alias dans `~/.bashrc`, après avoir rouvert Termux). Pour un **raccourci sur l'écran
 d'accueil**, installe l'application *Termux:Widget* (même source que Termux, par exemple F-Droid), puis
 ajoute un widget « Termux shortcut ». Le dossier des recettes par défaut est
-`~/storage/downloads/recettes` ; `RECETTES_DOSSIER=…` en choisit un autre, et `RECETTES_VERSION=main`
-(ou un numéro, par exemple `v1.1.1`, la valeur par défaut) la version téléchargée par `Recettes-maj`.
+`~/storage/downloads/recettes` ; `RECETTES_DOSSIER=…` en choisit un autre, et `RECETTES_VERSION=…` impose la version téléchargée par `Recettes-maj` (un numéro, par exemple `v1.1.1`, ou `main`).
+Sans cette variable, `Recettes-maj` cherche **la dernière release publiée** sur GitHub, télécharge les fichiers de cette version,
+puis remplace aussi les scripts `Recettes` et `Recettes-maj` de `~/.shortcuts` : plus besoin de relancer l'installateur à chaque version.
 Ces scripts exécutent du code téléchargé depuis ce dépôt : relis-les avant de les installer.
 
 ### Google Colab

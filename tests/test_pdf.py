@@ -148,6 +148,19 @@ class SourceEfarmz(unittest.TestCase):
         self.requete("/api/recipe?url=efarmz%3Av375.pdf%234", post=True)                    # ré-import : pas de doublon
         self.assertEqual(len(s.lire_base()), 2)
 
+    def test_reimport_remplace_la_recette_meme_si_le_titre_a_change(self):
+        """Une ancienne version importée (titre doublé, photo noire) est remplacée, pas dupliquée."""
+        ancienne = {"nom": "Œufs cocotte œufs cocotte", "url": "", "source": "eFarmz · v375.pdf p.4", "image": "data:image/png;base64,AAAA",
+                    "ingredients": ["x"], "etapes": ["y"] * 6}
+        autre = {"nom": "Autre", "url": "", "source": "Mamie", "ingredients": []}
+        sans_page = {"nom": "Sans page", "url": "", "source": "Mamie", "ingredients": []}
+        s.ajouter_base(ancienne)
+        s.ajouter_base(autre)
+        s.ajouter_base(sans_page)                                      # autre source sans page de PDF : clé = le nom
+        self.requete("/api/recipe?url=efarmz%3Av375.pdf%234", post=True)
+        noms = sorted(r["nom"] for r in s.lire_base())
+        self.assertEqual(noms, ["Autre", "Sans page", "Œufs cocotte"])
+
     def test_identifiants_invalides_ou_hors_dossier(self):
         for ident in ("efarmz:../serveur_recettes.py#1", "efarmz:/etc/passwd#1", "efarmz:v375.pdf", "efarmz:v375.pdf#x",
                       "efarmz:inconnu.pdf#2", "efarmz:v375.pdf#99", "efarmz:#1"):

@@ -8,6 +8,16 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Corrigé
+- Réimporter une page de PDF (eFarmz) remplace la recette déjà importée de cette page, même si son titre a changé
+  (une ancienne version erronée n'est plus dupliquée à côté de la correcte), dans la base du serveur comme dans l'interface.
+  Les recettes sans URL qui ne viennent pas d'un PDF restent distinguées par leur nom. La détection « déjà en base » des
+  recettes de PDF se fait par page de PDF.
+
+### Modifié
+- Termux : `Recettes-maj` télécharge par défaut la **dernière release publiée** (et non une version écrite en dur), et met à jour
+  les scripts `Recettes` et `Recettes-maj` installés dans `~/.shortcuts`. `RECETTES_VERSION` reste possible pour imposer une version.
+
 ## [1.1.1] - 2026-10-10
 
 ### Corrigé

@@ -600,6 +600,16 @@ def mettre_de_cote_base(cause):
     return cible
 
 
+SOURCE_PDF_RE = re.compile(r"\.pdf p\.\d+$", re.IGNORECASE)      # « eFarmz · fichier.pdf p.4 »
+
+
+def cle_recette(r):
+    """Identité d'une recette : son URL ; sans URL, la page de PDF d'où elle vient (réimporter la même page la remplace,
+    même si son titre a changé) ; sinon son nom."""
+    source = str(r.get("source") or "")
+    return r.get("url") or (f"pdf:{source}" if SOURCE_PDF_RE.search(source) else r.get("nom"))
+
+
 def ajouter_base(rec):
     with _file_lock:
         try:
@@ -610,8 +620,8 @@ def ajouter_base(rec):
         base = {}
         for r in existantes:
             r["nom"] = nettoyer_nom(r.get("nom"))      # nettoie aussi les anciens imports
-            base[r.get("url") or r.get("nom")] = r
-        base[rec.get("url") or rec["nom"]] = rec      # sans URL (recette de PDF) : le nom
+            base[cle_recette(r)] = r
+        base[cle_recette(rec)] = rec
         tmp = BASE_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(list(base.values()), f, ensure_ascii=False, indent=2)

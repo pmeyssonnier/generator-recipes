@@ -1,23 +1,65 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Met à jour le serveur et la page du générateur de recettes (la base n'est pas touchée)
+# Met à jour le serveur et la page du générateur de recettes vers la dernière release publiée
+# (la base n'est pas touchée), puis met à jour ces scripts de raccourci eux-mêmes.
+# RECETTES_VERSION=v1.1.1 impose une version ; RECETTES_VERSION=main prend la branche principale.
 DOSSIER="${RECETTES_DOSSIER:-$HOME/storage/downloads/recettes}"
-VERSION="${RECETTES_VERSION:-v1.1.1}"       # pour la dernière version : main
-BASE="https://raw.githubusercontent.com/pmeyssonnier/generator-recipes/$VERSION"
-cd "$DOSSIER" || { echo "Dossier introuvable : $DOSSIER"; read -r -p "Entrée pour fermer"; exit 1; }
-for f in serveur_recettes.py generateur-recettes.html; do
-  if ! curl -fsSL "$BASE/$f" -o "$f.tmp"; then
-    echo "Échec du téléchargement de $f ($VERSION) : rien n'a été modifié."
-    rm -f serveur_recettes.py.tmp generateur-recettes.html.tmp
-    read -r -p "Entrée pour fermer"; exit 1
+DEPOT="pmeyssonnier/generator-recipes"
+RACCOURCIS="${RECETTES_RACCOURCIS:-$HOME/.shortcuts}"
+
+attendre() { read -r -p "Entrée pour fermer" || true; }
+
+mettre_a_jour() {
+  local VERSION="${RECETTES_VERSION:-}" f
+  cd "$DOSSIER" || { echo "Dossier introuvable : $DOSSIER"; attendre; return 1; }
+  if [ -z "$VERSION" ]; then
+    VERSION=$(curl -fsSL "${RECETTES_API:-https://api.github.com/repos/$DEPOT}/releases/latest" 2>/dev/null \
+              | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
+    if [ -z "$VERSION" ]; then
+      echo "Dernière version introuvable (réseau ?). Rien n'a été modifié."
+      echo "Précise-la à la main, par exemple : RECETTES_VERSION=v1.1.1 recettes-maj"
+      attendre; return 1
+    fi
   fi
-done
-mv serveur_recettes.py.tmp serveur_recettes.py && mv generateur-recettes.html.tmp generateur-recettes.html
-# Extraction de PDF (source eFarmz) : facultative, absente des versions plus anciennes
-if curl -fsSL "$BASE/pdf_recettes.py" -o pdf_recettes.py.tmp; then
-  mv pdf_recettes.py.tmp pdf_recettes.py
-else
-  rm -f pdf_recettes.py.tmp
-  echo "pdf_recettes.py absent de la version $VERSION : la source eFarmz (PDF) restera indisponible."
-fi
-echo "Mise à jour terminée :"; python serveur_recettes.py --version
-read -r -p "Entrée pour fermer" || true
+  case "$VERSION" in *[!A-Za-z0-9._-]*|"") echo "Version invalide : $VERSION"; attendre; return 1;; esac
+  local BASE="https://raw.githubusercontent.com/$DEPOT/$VERSION"
+  echo "Version : $VERSION"
+  for f in serveur_recettes.py generateur-recettes.html; do
+    if ! curl -fsSL "$BASE/$f" -o "$f.tmp"; then
+      echo "Échec du téléchargement de $f ($VERSION) : rien n'a été modifié."
+      rm -f serveur_recettes.py.tmp generateur-recettes.html.tmp
+      attendre; return 1
+    fi
+  done
+  mv serveur_recettes.py.tmp serveur_recettes.py && mv generateur-recettes.html.tmp generateur-recettes.html
+  # Extraction de PDF (source eFarmz) : facultative, absente des versions plus anciennes
+  if curl -fsSL "$BASE/pdf_recettes.py" -o pdf_recettes.py.tmp; then
+    mv pdf_recettes.py.tmp pdf_recettes.py
+  else
+    rm -f pdf_recettes.py.tmp
+    echo "pdf_recettes.py absent de la version $VERSION : la source eFarmz (PDF) restera indisponible."
+  fi
+  echo "Mise à jour terminée :"; python serveur_recettes.py --version
+  mettre_a_jour_raccourcis "$BASE"
+  attendre
+}
+
+# Les scripts installés dans ~/.shortcuts sont remplacés par ceux de cette version, s'ils sont installés.
+# Le remplacement se fait par renommage : le script en cours d'exécution n'est pas modifié sur place.
+mettre_a_jour_raccourcis() {
+  local f
+  [ -f "$RACCOURCIS/Recettes" ] && [ -f "$RACCOURCIS/Recettes-maj" ] || return 0
+  for f in Recettes Recettes-maj; do
+    if ! curl -fsSL "$1/termux/$f" -o "$RACCOURCIS/$f.tmp"; then
+      rm -f "$RACCOURCIS/Recettes.tmp" "$RACCOURCIS/Recettes-maj.tmp"
+      echo "Scripts de raccourci non mis à jour (téléchargement impossible) : la mise à jour du serveur est faite."
+      return 0
+    fi
+  done
+  for f in Recettes Recettes-maj; do
+    chmod +x "$RACCOURCIS/$f.tmp" && mv "$RACCOURCIS/$f.tmp" "$RACCOURCIS/$f"
+  done
+  echo "Scripts de raccourci mis à jour."
+}
+
+mettre_a_jour
+exit $?

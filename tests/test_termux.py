@@ -19,7 +19,7 @@ out=""; url=""
 while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift;; http*) url="$1";; esac; shift; done
 echo "$url" >> "$FAUX_JOURNAL"
 if [ -n "$FAUX_ECHEC_SUR" ]; then case "$url" in *"$FAUX_ECHEC_SUR"*) exit 22;; esac; fi
-cp "$FAUX_SOURCES/$(basename "$url")" "$out"
+if [ -n "$out" ]; then cp "$FAUX_SOURCES/$(basename "$url")" "$out"; else cat "$FAUX_SOURCES/$(basename "$url")"; fi
 """
 FAUX_PYTHON = '#!/bin/bash\nexec "%s" "$@"\n' % sys.executable
 FAUX_PYTHON_ESPION = '#!/bin/bash\necho "python $* (dans $(pwd))" >> "$FAUX_JOURNAL"\n'
@@ -53,6 +53,18 @@ class ScriptsTermux(unittest.TestCase):
         return subprocess.run([BASH, os.path.join(TERMUX, script)], env=env, cwd=self.tmp.name,
                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
 
+    def sources_release(self, tag="v9.9.9"):
+        """Faux dépôt : les fichiers de l'application, les scripts Termux et la réponse de l'API « latest »."""
+        d = os.path.join(self.tmp.name, "sources")
+        os.makedirs(d, exist_ok=True)
+        for nom in ("serveur_recettes.py", "generateur-recettes.html", "pdf_recettes.py"):
+            shutil.copy(os.path.join(RACINE, nom), d)
+        for nom in ("Recettes", "Recettes-maj"):
+            shutil.copy(os.path.join(TERMUX, nom), d)
+        with open(os.path.join(d, "latest"), "w", encoding="utf-8") as f:
+            f.write('{\n  "url": "x",\n  "tag_name": "%s",\n  "name": "Une release"\n}\n' % tag)
+        return d
+
     def journal_lignes(self):
         with open(self.journal, encoding="utf-8") as f:
             return f.read().splitlines()
@@ -73,12 +85,13 @@ class ScriptsTermux(unittest.TestCase):
             self.assertEqual((r.returncode, r.stderr), (0, ""), nom)
 
     # ---------- Recettes-maj ----------
-    def test_maj_remplace_les_deux_fichiers_sans_toucher_la_base(self):
+    def test_maj_remplace_les_fichiers_sans_toucher_la_base(self):
+        """Sans RECETTES_VERSION : la dernière release publiée est cherchée, puis téléchargée."""
         ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
         for nom in ("serveur_recettes.py", "generateur-recettes.html"):
             ecrire(os.path.join(self.dossier, nom), "ANCIEN", executable=False)
         ecrire(os.path.join(self.dossier, "recettes_marmiton.json"), '[{"nom": "ma recette"}]', executable=False)
-        r = self.lancer("Recettes-maj", RECETTES_DOSSIER=self.dossier)
+        r = self.lancer("Recettes-maj", sources=self.sources_release("v9.9.9"), RECETTES_DOSSIER=self.dossier)
         self.assertEqual(r.returncode, 0, r.stderr)
         for nom in ("serveur_recettes.py", "generateur-recettes.html", "pdf_recettes.py"):
             self.assertEqual(self.lire(self.dossier, nom), self.lire(RACINE, nom), nom)
@@ -86,19 +99,96 @@ class ScriptsTermux(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(self.dossier)),
                          ["generateur-recettes.html", "pdf_recettes.py", "recettes_marmiton.json", "serveur_recettes.py"],
                          "aucun reste .tmp")
-        self.assertTrue(all("/v1.1.1/" in u for u in self.journal_lignes()), "version par défaut épinglée")
+        lignes = self.journal_lignes()
+        self.assertIn("/releases/latest", lignes[0])
+        self.assertTrue(all("/v9.9.9/" in u for u in lignes[1:]), "les fichiers viennent de la release trouvée")
+        self.assertIn("Version : v9.9.9", r.stdout)
         self.assertIn("serveur_recettes ", r.stdout)                    # --version affichée
 
     def test_maj_version_au_choix(self):
         ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
         self.lancer("Recettes-maj", RECETTES_DOSSIER=self.dossier, RECETTES_VERSION="main")
         self.assertTrue(all("/main/" in u for u in self.journal_lignes()))
+        self.assertFalse(any("releases/latest" in u for u in self.journal_lignes()), "version imposée : pas d'appel à l'API")
+
+    def test_maj_derniere_version_introuvable(self):
+        for nom in ("serveur_recettes.py", "generateur-recettes.html"):
+            ecrire(os.path.join(self.dossier, nom), "ANCIEN", executable=False)
+        r = self.lancer("Recettes-maj", sources=self.sources_release(), RECETTES_DOSSIER=self.dossier,
+                        FAUX_ECHEC_SUR="releases/latest")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Dernière version introuvable", r.stdout)
+        self.assertIn("RECETTES_VERSION=", r.stdout)
+        for nom in ("serveur_recettes.py", "generateur-recettes.html"):
+            self.assertEqual(self.lire(self.dossier, nom), "ANCIEN")
+
+    def test_maj_version_invalide_refusee(self):
+        r = self.lancer("Recettes-maj", RECETTES_DOSSIER=self.dossier, RECETTES_VERSION="../main")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Version invalide", r.stdout)
+        self.assertEqual(self.journal_lignes(), [], "aucun téléchargement tenté")
+
+    def test_maj_met_a_jour_les_scripts_de_raccourci(self):
+        ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
+        raccourcis = os.path.join(self.tmp.name, "shortcuts")
+        os.makedirs(raccourcis)
+        for nom in ("Recettes", "Recettes-maj"):
+            ecrire(os.path.join(raccourcis, nom), "#!/bin/bash\necho ANCIEN\n")
+        r = self.lancer("Recettes-maj", sources=self.sources_release(), RECETTES_DOSSIER=self.dossier,
+                        RECETTES_RACCOURCIS=raccourcis)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Scripts de raccourci mis à jour", r.stdout)
+        for nom in ("Recettes", "Recettes-maj"):
+            self.assertEqual(self.lire(raccourcis, nom), self.lire(TERMUX, nom), nom)
+            self.assertTrue(os.access(os.path.join(raccourcis, nom), os.X_OK), f"{nom} exécutable")
+        self.assertEqual(sorted(os.listdir(raccourcis)), ["Recettes", "Recettes-maj"], "aucun reste .tmp")
+
+    def test_maj_depuis_le_raccourci_installe_se_remplace_sans_planter(self):
+        """Le script exécuté depuis ~/.shortcuts se remplace lui-même pendant son exécution."""
+        ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
+        raccourcis = os.path.join(self.tmp.name, "shortcuts")
+        os.makedirs(raccourcis)
+        shutil.copy(os.path.join(TERMUX, "Recettes"), raccourcis)
+        copie = os.path.join(raccourcis, "Recettes-maj")
+        shutil.copy(os.path.join(TERMUX, "Recettes-maj"), copie)
+        env = dict(os.environ, HOME=self.home, FAUX_JOURNAL=self.journal, FAUX_SOURCES=self.sources_release("v9.9.9"),
+                   PATH=self.bin + os.pathsep + os.environ["PATH"], RECETTES_DOSSIER=self.dossier,
+                   RECETTES_RACCOURCIS=raccourcis)
+        r = subprocess.run([BASH, copie], env=env, cwd=self.tmp.name, stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual((r.returncode, r.stderr), (0, ""))
+        self.assertIn("Scripts de raccourci mis à jour", r.stdout)
+        self.assertEqual(self.lire(raccourcis, "Recettes-maj"), self.lire(TERMUX, "Recettes-maj"))
+
+    def test_maj_scripts_de_raccourci_non_installes_ignores(self):
+        ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
+        r = self.lancer("Recettes-maj", sources=self.sources_release(), RECETTES_DOSSIER=self.dossier,
+                        RECETTES_RACCOURCIS=os.path.join(self.tmp.name, "absent"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("Scripts de raccourci", r.stdout)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "absent")), "rien n'est créé hors installation")
+
+    def test_maj_echec_des_scripts_de_raccourci_n_annule_pas_la_maj(self):
+        ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
+        raccourcis = os.path.join(self.tmp.name, "shortcuts")
+        os.makedirs(raccourcis)
+        for nom in ("Recettes", "Recettes-maj"):
+            ecrire(os.path.join(raccourcis, nom), "ANCIEN")
+        r = self.lancer("Recettes-maj", sources=self.sources_release(), RECETTES_DOSSIER=self.dossier,
+                        RECETTES_RACCOURCIS=raccourcis, FAUX_ECHEC_SUR="termux/Recettes-maj")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("non mis à jour", r.stdout)
+        self.assertEqual(self.lire(self.dossier, "serveur_recettes.py"), self.lire(RACINE, "serveur_recettes.py"))
+        for nom in ("Recettes", "Recettes-maj"):
+            self.assertEqual(self.lire(raccourcis, nom), "ANCIEN", f"{nom} inchangé")
+        self.assertEqual(sorted(os.listdir(raccourcis)), ["Recettes", "Recettes-maj"], "aucun reste .tmp")
 
     def test_maj_echec_ne_modifie_rien(self):
         ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
         for nom in ("serveur_recettes.py", "generateur-recettes.html"):
             ecrire(os.path.join(self.dossier, nom), "ANCIEN", executable=False)
-        r = self.lancer("Recettes-maj", RECETTES_DOSSIER=self.dossier, FAUX_ECHEC_SUR="generateur-recettes.html")
+        r = self.lancer("Recettes-maj", sources=self.sources_release(), RECETTES_DOSSIER=self.dossier,
+                        FAUX_ECHEC_SUR="generateur-recettes.html")
         self.assertEqual(r.returncode, 1)
         self.assertIn("rien n'a été modifié", r.stdout)
         for nom in ("serveur_recettes.py", "generateur-recettes.html"):
@@ -108,7 +198,8 @@ class ScriptsTermux(unittest.TestCase):
     def test_maj_module_pdf_facultatif(self):
         """Une version sans pdf_recettes.py (ex. v1.0.0) se met quand même à jour."""
         ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
-        r = self.lancer("Recettes-maj", RECETTES_DOSSIER=self.dossier, FAUX_ECHEC_SUR="pdf_recettes.py")
+        r = self.lancer("Recettes-maj", sources=self.sources_release(), RECETTES_DOSSIER=self.dossier,
+                        FAUX_ECHEC_SUR="pdf_recettes.py")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("eFarmz (PDF) restera indisponible", r.stdout)
         self.assertEqual(sorted(os.listdir(self.dossier)), ["generateur-recettes.html", "serveur_recettes.py"])
