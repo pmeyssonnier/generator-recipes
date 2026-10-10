@@ -1,8 +1,9 @@
-"""Tests de l'interface dans un vrai navigateur (Chromium), contre le vrai serveur.
+"""Tests de l'interface dans un vrai navigateur (Chromium, Firefox ou WebKit), contre le vrai serveur.
 
 Nécessitent Playwright (ignorés s'il n'est pas installé) :
-    pip install playwright && playwright install chromium
+    pip install playwright && playwright install chromium firefox webkit
     python -m unittest tests.test_interface -v
+RECETTES_NAVIGATEUR=chromium|firefox|webkit : navigateur utilisé (défaut : chromium ; WebKit = moteur de Safari).
 RECETTES_CHROMIUM=/chemin/chromium : utilise un Chromium existant au lieu de celui de Playwright.
 
 Le serveur tourne dans ce processus ; seules l'extraction d'une recette (scrape_recipe) et la lecture
@@ -10,6 +11,7 @@ d'une page de sélection (lister_page) sont simulées : aucun accès réseau ext
 """
 import json
 import os
+import socket
 import re
 import sys
 import tempfile
@@ -70,8 +72,16 @@ class Interface(unittest.TestCase):
         cls.srv, cls.url = demarrer(s.Handler)
         cls.srv_ancien, cls.url_ancien = demarrer(Ancien)
         cls.pw = sync_playwright().start()
-        cls.nav = cls.pw.chromium.launch(executable_path=os.environ.get("RECETTES_CHROMIUM") or None,
-                                         args=["--host-resolver-rules=MAP monpc.local 127.0.0.1"])
+        cls.moteur = (os.environ.get("RECETTES_NAVIGATEUR") or "chromium").lower()
+        if cls.moteur == "chromium":
+            cls.nav = cls.pw.chromium.launch(executable_path=os.environ.get("RECETTES_CHROMIUM") or None,
+                                             args=["--host-resolver-rules=MAP monpc.local 127.0.0.1"])
+        elif cls.moteur == "firefox":
+            cls.nav = cls.pw.firefox.launch(firefox_user_prefs={"network.dns.localDomains": "monpc.local"})
+        elif cls.moteur == "webkit":
+            cls.nav = cls.pw.webkit.launch()
+        else:
+            raise ValueError(f"RECETTES_NAVIGATEUR inconnu : {cls.moteur} (chromium, firefox ou webkit)")
 
     @classmethod
     def tearDownClass(cls):
@@ -114,7 +124,9 @@ class Interface(unittest.TestCase):
             self.addCleanup(p.stop)
 
         self.erreurs = []
-        self.ctx = self.nav.new_context(permissions=["clipboard-read", "clipboard-write"])
+        # l'octroi des permissions du presse-papiers n'existe que dans Chromium
+        self.ctx = self.nav.new_context(
+            permissions=["clipboard-read", "clipboard-write"] if self.moteur == "chromium" else [])
         self.addCleanup(self.ctx.close)
         self.ctx.add_init_script(f"""
             window.__ecritures = 0;
@@ -404,7 +416,8 @@ class Interface(unittest.TestCase):
         for attendu in ("== Recette 1", "== Recette 2", "☐ poulet", "☐ sel"):
             self.assertIn(attendu, liste)
         self.page.click("#btnCopier")
-        self.assertEqual(self.page.evaluate("() => navigator.clipboard.readText()"), liste)
+        if self.moteur == "chromium":                                   # lecture du presse-papiers : Chromium seulement
+            self.assertEqual(self.page.evaluate("() => navigator.clipboard.readText()"), liste)
         self.assertIn("Liste copiée", self.alertes_toast())
         self.page.click("#btnViderPanier")
         self.assertEqual(self.page.inner_text("#nbPanier"), "0")
@@ -574,6 +587,11 @@ class Interface(unittest.TestCase):
 
     # ---------- nom d'hôte personnalisé (RECETTES_HOTES) ----------
     def test_nom_d_hote_personnalise_appelle_le_bon_serveur(self):
+        try:
+            socket.gethostbyname("monpc.local")
+        except OSError:
+            if self.moteur == "webkit":
+                self.skipTest("monpc.local ne se résout pas (ajouter « 127.0.0.1 monpc.local » à /etc/hosts)")
         url = self.url.replace("127.0.0.1", "monpc.local")
         appels = []
         self.page.on("request", lambda r: appels.append(urlparse(r.url).netloc) if "/api/" in r.url else None)

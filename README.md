@@ -150,6 +150,14 @@ Pour vérifier que les sources répondent encore (après une mise à jour d'un s
 python tester_sources.py            # ou : python tester_sources.py quiche
 ```
 
+## Navigateurs
+
+La page utilise `<dialog>`, `:focus-visible` et `aspect-ratio`, ce qui suppose un navigateur récent :
+Chrome / Edge 99+, Firefox 98+, Safari 15.4+ (minimum déduit des fonctions utilisées). Les tests de
+l'interface tournent en CI sur Chromium, Firefox et WebKit (le moteur de Safari), dans leur version
+actuelle. Sous Safari sur Mac, la touche Tab n'atteint les boutons que si l'option « Tab met en
+évidence chaque élément » est activée (Réglages Safari › Avancé) : c'est un réglage du navigateur.
+
 ## Tests
 
 ```bash
@@ -165,8 +173,9 @@ le clavier, la pagination, les fichiers volumineux, le stockage plein, un nom d'
 compatibilité avec un ancien serveur. Ils sont ignorés si Playwright n'est pas installé :
 
 ```bash
-pip install playwright && playwright install chromium
-python -m unittest tests.test_interface -v     # RECETTES_CHROMIUM=/chemin/chromium pour un Chromium existant
+pip install playwright && playwright install chromium firefox webkit
+python -m unittest tests.test_interface -v     # RECETTES_NAVIGATEUR=firefox ou webkit (Safari) ; défaut : chromium
+                                               # RECETTES_CHROMIUM=/chemin/chromium pour un Chromium existant
 ```
 
 Ces tests et une vérification `pyflakes` tournent automatiquement sur GitHub Actions
