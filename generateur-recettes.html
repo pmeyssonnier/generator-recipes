@@ -286,9 +286,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const norm = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const esc = s => String(s ?? "").replace(/[&<>"']/g,
     c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
-  // Fractions en petit, en exposant : « 1 1/2 » → 1 suivi de 1/2, « 1/4 càc » → 1/4 seul (numérateur < dénominateur)
-  const fractions = s => esc(s).replace(/(?<![\d\/.,])(?:(\d+) )?(\d)\/([2-9])(?![\d\/])/g,
-    (m, e, a, b) => +a < +b ? `${e ? e + " " : ""}<sup class="frac">${a}/${b}</sup>` : m);
+  // Nombres mixtes : « 1 1/2 » → 1 suivi de 1/2 en petit, en exposant. Une fraction seule (« 1/2 gousse ») reste telle quelle.
+  const fractions = s => esc(s).replace(/(?<![\d\/.,])(\d+) (\d)\/([2-9])(?![\d\/])/g,
+    (m, e, a, b) => +a < +b ? `${e} <sup class="frac">${a}/${b}</sup>` : m);
   const num = v => { const n = parseFloat(String(v ?? "").replace(",", ".")); return isNaN(n) ? null : n; };
   const total = r => r.total_min || (((r.prep_min || 0) + (r.cuisson_min || 0)) || null);
   // Seules les URL http(s) sont acceptées (un JSON importé pourrait contenir « javascript: »)

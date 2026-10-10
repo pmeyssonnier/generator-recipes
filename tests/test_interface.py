@@ -220,14 +220,16 @@ class Interface(unittest.TestCase):
         self.assertEqual(self.noms_affiches(), ["Autre", "Autre 2", "Filet de poisson"])
 
     def test_fractions_en_exposant(self):
-        """Dans la fiche, « 1 1/2 », « 1/2 gousse » ou « 1/4 càc » ont la fraction en petit, en exposant."""
+        """Dans la fiche, seuls les nombres mixtes (« 1 1/2 », « 2 1/4 ») ont la fraction en exposant ; « 1/2 gousse » reste seule."""
         self.ouvrir()
-        r = dict(recette(1), ingredients=["1 1/2 oignon", "1/2 gousse d'ail", "1/4 càc de sel", "10/4 g de sucre", "2 pommes"])
+        r = dict(recette(1), ingredients=["1 1/2 oignon", "2 1/4 l de lait", "1/2 gousse d'ail", "1/4 càc de sel",
+                                          "10/4 g de sucre", "2 pommes"])
         self.charger([r])
         self.page.locator(".card-link", has_text="Recette 1").click()
-        self.assertEqual(self.page.locator("#dIng sup.frac").all_text_contents(), ["1/2", "1/2", "1/4"])
+        self.assertEqual(self.page.locator("#dIng sup.frac").all_text_contents(), ["1/2", "1/4"])
         self.assertEqual(self.page.locator("#dIng li").nth(0).inner_text().strip(), "1 1/2 oignon")
-        self.assertEqual(self.page.locator("#dIng li").nth(3).locator("sup").count(), 0)
+        for i in (2, 3, 4, 5):
+            self.assertEqual(self.page.locator("#dIng li").nth(i).locator("sup").count(), 0)
 
     def test_supprimer_une_recette(self):
         """Bouton « Supprimer » de la fiche : confirmation, retrait du navigateur et de recettes.json, favoris compris."""
