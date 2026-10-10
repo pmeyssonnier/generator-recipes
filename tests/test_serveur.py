@@ -134,6 +134,38 @@ class Serveur(unittest.TestCase):
             urllib.request.urlopen(req)
         self.assertEqual(c.exception.code, 403)
 
+    def test_nom_d_hote_personnalise(self):
+        # RECETTES_HOTES=monpc.local : la page ET l'API sont servies sous ce nom (même origine)
+        h = {"Host": "monpc.local:8765"}
+        self.assertEqual(self.get("/api/ping", h)[0], 403)                       # inconnu par défaut
+        with mock.patch.object(s, "HOTES", s.HOTES | {"monpc.local"}):
+            self.assertEqual(self.get("/", h)[0], 200)
+            self.assertEqual(self.get("/api/ping", h)[0], 200)
+            h_origine = dict(h, Origin="http://monpc.local:8765")                # appel de la page elle-même
+            self.assertEqual(self.get("/api/ping", h_origine)[0], 200)
+            self.assertEqual(self.get("/api/ping", dict(h, Origin="http://evil.com"))[0], 403)
+
+    def test_ping_n_expose_que_le_nom_du_fichier(self):
+        corps = json.loads(self.get("/api/ping")[1])
+        self.assertEqual(corps["fichier"], os.path.basename(s.BASE_FILE))
+        self.assertNotIn(os.sep, corps["fichier"])
+        self.assertNotIn(s.DIR, json.dumps(corps))
+
+    def test_erreur_interne_sans_chemin_ni_detail(self):
+        secret = "[Errno 13] Permission denied: '/home/secret/recettes.json'"
+        with mock.patch.object(s, "lire_base", side_effect=PermissionError(secret)):
+            code, corps = self.get("/api/base")
+        self.assertEqual(code, 500)
+        self.assertNotIn("/home/secret", corps.decode())
+        self.assertIn("Erreur interne", json.loads(corps)["erreur"])
+
+    def test_message_pas_de_donnees_recipe_conserve(self):
+        # l'interface reconnaît ce message pour basculer vers la lecture d'une page de sélection
+        with mock.patch.object(s, "scrape_recipe", side_effect=ValueError("Pas de données Recipe sur cette page")):
+            code, corps = self.get("/api/recipe?url=https://www.marmiton.org/x", {"X-Recettes": "1"}, "POST")
+        self.assertEqual(code, 500)
+        self.assertIn("Pas de données Recipe", json.loads(corps)["erreur"])
+
     def test_ping_annonce_la_version_de_l_api(self):
         code, body = self.get("/api/ping")
         self.assertEqual((code, json.loads(body)["api"]), (200, s.API_VERSION))
@@ -294,3 +326,36 @@ class Taille(unittest.TestCase):
                 s.fetch(f"https://a.test/{i}")
         self.assertEqual(len(s._cache), s.MAX_CACHE)
         self.assertNotIn("https://a.test/0", s._cache)                 # la plus ancienne est évincée
+
+
+class Distant(s.Handler):
+    """Même serveur, mais le client se présente comme un autre appareil du réseau local."""
+
+    @property
+    def client_address(self):
+        return ("192.168.1.9", 50000)
+
+    @client_address.setter
+    def client_address(self, valeur):
+        pass
+
+
+class PageIntrouvable(unittest.TestCase):
+    def requete(self, handler):
+        srv = s.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (srv.shutdown(), srv.server_close()))
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/")
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode()
+
+    def test_dossier_visible_du_poste_seulement(self):
+        with mock.patch.object(s, "trouver_page", return_value=None):
+            code, page = self.requete(s.Handler)                    # le poste lui-même
+            self.assertEqual(code, 404)
+            self.assertIn(s.DIR, page)
+            code, page = self.requete(Distant)                      # un autre appareil du réseau
+            self.assertEqual(code, 404)
+            self.assertNotIn(s.DIR, page)
+            self.assertNotIn("serveur_recettes.py", page)           # ni la liste des fichiers

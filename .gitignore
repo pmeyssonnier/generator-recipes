@@ -1,6 +1,7 @@
 # Données extraites : contenu des sites sources, à ne pas redistribuer
 recettes.json
 recettes_marmiton.json
+recettes.json.corrompu-*
 recettes_*.json
 *.tmp
 

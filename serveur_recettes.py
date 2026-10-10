@@ -429,19 +429,68 @@ def migrer_base(ancien=None, nouveau=None):
     return f"Base renommée : {os.path.basename(ancien)} → {os.path.basename(nouveau)}"
 
 
-def lire_base():
+class BaseCorrompue(Exception):
+    """recettes.json existe mais n'est pas une base de recettes lisible."""
+
+
+def lire_base_brute():
+    """Recettes de recettes.json ([] si le fichier n'existe pas).
+    Lève BaseCorrompue si le fichier est illisible ou n'a pas le bon format ; toute autre erreur
+    d'accès (droits…) se propage telle quelle. Jamais d'écriture ici."""
     try:
         with open(BASE_FILE, encoding="utf-8") as f:
             d = json.load(f)
-        return d if isinstance(d, list) else d.get("recettes", [])
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
         return []
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        raise BaseCorrompue(f"JSON invalide ({e})") from e
+    liste = d.get("recettes") if isinstance(d, dict) else d
+    if not isinstance(liste, list) or not all(isinstance(r, dict) for r in liste):
+        raise BaseCorrompue("format inattendu (liste de recettes attendue)")
+    return liste
+
+
+_base_signalee = set()
+
+
+def lire_base():
+    """Pour l'affichage : [] si la base est corrompue (le fichier n'est pas touché, signalé une fois)."""
+    try:
+        return lire_base_brute()
+    except BaseCorrompue as e:
+        try:
+            marque = os.stat(BASE_FILE).st_mtime_ns
+        except OSError:
+            marque = None
+        if marque not in _base_signalee:
+            _base_signalee.add(marque)
+            print(f"   ⚠ {os.path.basename(BASE_FILE)} est illisible : {e}. "
+                  "Il sera conservé tel quel avant la prochaine écriture.")
+        return []
+
+
+def mettre_de_cote_base(cause):
+    """Renomme la base corrompue en recettes.json.corrompu-AAAAMMJJ-HHMMSS (récupérable à la main)."""
+    horodatage = time.strftime("%Y%m%d-%H%M%S")
+    cible, n = f"{BASE_FILE}.corrompu-{horodatage}", 1
+    while os.path.exists(cible):
+        n += 1
+        cible = f"{BASE_FILE}.corrompu-{horodatage}-{n}"
+    os.replace(BASE_FILE, cible)
+    print(f"   ⚠ {os.path.basename(BASE_FILE)} était illisible ({cause}) : conservé dans "
+          f"{os.path.basename(cible)}, nouvelle base créée.")
+    return cible
 
 
 def ajouter_base(rec):
     with _file_lock:
+        try:
+            existantes = lire_base_brute()
+        except BaseCorrompue as e:
+            mettre_de_cote_base(e)               # jamais d'écrasement du contenu récupérable
+            existantes = []
         base = {}
-        for r in lire_base():
+        for r in existantes:
             r["nom"] = nettoyer_nom(r.get("nom"))      # nettoie aussi les anciens imports
             base[r.get("url") or r.get("nom")] = r
         base[rec["url"]] = rec
@@ -559,13 +608,14 @@ class Handler(BaseHTTPRequestHandler):
         if u.path in ("/", "/index.html") or u.path.lstrip("/") in NOMS_PAGE:
             page = trouver_page()
             if not page:
-                fichiers = "\n".join(sorted(os.listdir(DIR))) or "(dossier vide)"
+                local = self.client_address[0] in ("127.0.0.1", "::1")      # détails réservés au poste lui-même
+                fichiers = "\n".join(sorted(os.listdir(DIR))) or "(dossier vide)" if local else ""
+                details = (f"<p>Dossier du serveur : <code>{html.escape(DIR)}</code></p>"
+                           f"<p>Contenu :</p><pre>{html.escape(fichiers)}</pre>") if local else ""
                 return self.send_html(
                     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-                    "<h2>Page du générateur introuvable</h2>"
-                    f"<p>Dossier du serveur : <code>{html.escape(DIR)}</code></p>"
-                    f"<p>Contenu :</p><pre>{html.escape(fichiers)}</pre>"
-                    "<p>Place <b>generateur-recettes.html</b> dans ce dossier puis recharge.</p>", 404)
+                    "<h2>Page du générateur introuvable</h2>" + details +
+                    "<p>Place <b>generateur-recettes.html</b> dans le dossier du serveur puis recharge.</p>", 404)
             with open(os.path.join(DIR, page), "rb") as f:
                 body = f.read()
             self.send_response(200)
@@ -612,7 +662,8 @@ class Handler(BaseHTTPRequestHandler):
         qs = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
             if u.path == "/api/ping":
-                return self.send_json({"ok": True, "api": API_VERSION, "base": len(lire_base()), "fichier": BASE_FILE})
+                return self.send_json({"ok": True, "api": API_VERSION, "base": len(lire_base()),
+                                       "fichier": os.path.basename(BASE_FILE)})
             if u.path == "/api/base":
                 base = lire_base()
                 for r in base:
@@ -658,8 +709,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"erreur": f"Réseau : {e.reason}"}, 502)
         except TimeoutError:
             self.send_json({"erreur": "Le site met trop de temps à répondre"}, 504)
-        except Exception as e:
+        except ValueError as e:                  # messages écrits par ce serveur (ex. « Pas de données Recipe »)
             self.send_json({"erreur": str(e)}, 500)
+        except Exception as e:                   # le détail (chemins, système…) reste dans la fenêtre du serveur
+            print(f"   ⚠ Erreur interne sur {u.path} : {type(e).__name__} : {e}")
+            self.send_json({"erreur": "Erreur interne du serveur (détails dans sa fenêtre)"}, 500)
 
 
 # ---------------- Lancement ----------------

@@ -219,6 +219,81 @@ class Base(unittest.TestCase):
             self.assertEqual(noms, ["A bis", "B"])
             self.assertFalse(os.path.exists(s.BASE_FILE + ".tmp"))
 
+    def base_dans(self, d, contenu=None):
+        f = os.path.join(d, "recettes.json")
+        if contenu is not None:
+            with open(f, "wb") as h:
+                h.write(contenu)
+        return f
+
+    def test_base_corrompue_jamais_ecrasee(self):
+        import tempfile
+        original = b'[{"nom": "Precieuse", "url": "u0", "ingredients": ["x"]}, {"nom": "Tronquee", "ur'   # coupée net
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(s, "BASE_FILE", self.base_dans(d, original)):
+            self.assertEqual(s.lire_base(), [])                        # affichage : liste vide…
+            with open(s.BASE_FILE, "rb") as h:
+                self.assertEqual(h.read(), original)                   # …mais le fichier n'est pas touché
+            s.ajouter_base({"url": "u1", "nom": "Nouvelle"})
+            copies = [f for f in os.listdir(d) if ".corrompu-" in f]
+            self.assertEqual(len(copies), 1)
+            with open(os.path.join(d, copies[0]), "rb") as h:
+                self.assertEqual(h.read(), original)                   # contenu récupérable intact
+            self.assertEqual([r["nom"] for r in s.lire_base()], ["Nouvelle"])
+
+    def test_formats_inattendus_consideres_corrompus(self):
+        import tempfile
+        for contenu in (b"", b"123", b'"texte"', b'{"autre": 1}', b'{"recettes": "x"}', b"[1, 2]",
+                        b'[{"nom": "ok"}, "intrus"]', b"\xff\xfe\x00invalide"):
+            with tempfile.TemporaryDirectory() as d, mock.patch.object(s, "BASE_FILE", self.base_dans(d, contenu)):
+                self.assertEqual(s.lire_base(), [], contenu)
+                s.ajouter_base({"url": "u1", "nom": "N"})
+                copies = [f for f in os.listdir(d) if ".corrompu-" in f]
+                self.assertEqual(len(copies), 1, contenu)
+                with open(os.path.join(d, copies[0]), "rb") as h:
+                    self.assertEqual(h.read(), contenu, contenu)
+
+    def test_base_valide_jamais_mise_de_cote(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(s, "BASE_FILE", self.base_dans(d, b"[]")):
+            s.ajouter_base({"url": "u1", "nom": "A"})
+            s.ajouter_base({"url": "u2", "nom": "B"})
+            self.assertEqual(sorted(os.listdir(d)), ["recettes.json"])
+            self.assertEqual(len(s.lire_base()), 2)
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(
+                s, "BASE_FILE", self.base_dans(d, b'{"recettes": [{"nom": "Ancien", "url": "u0"}]}')):
+            s.ajouter_base({"url": "u1", "nom": "A"})                  # ancien format {"recettes": [...]}
+            self.assertEqual(sorted(r["nom"] for r in s.lire_base()), ["A", "Ancien"])
+            self.assertEqual(os.listdir(d), ["recettes.json"])
+
+    def test_deux_corruptions_dans_la_meme_seconde(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(s, "BASE_FILE", self.base_dans(d, b"{")), \
+                mock.patch.object(s.time, "strftime", return_value="20260101-000000"):
+            s.ajouter_base({"url": "u1", "nom": "A"})
+            with open(s.BASE_FILE, "wb") as h:
+                h.write(b"{{")                                         # corrompue à nouveau
+            s.ajouter_base({"url": "u2", "nom": "B"})
+            copies = sorted(f for f in os.listdir(d) if ".corrompu-" in f)
+            self.assertEqual(len(copies), 2)                           # aucune copie n'en écrase une autre
+
+    def test_erreur_d_acces_n_ecrase_rien(self):
+        import tempfile
+        original = b'[{"nom": "Precieuse", "url": "u0"}]'
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(s, "BASE_FILE", self.base_dans(d, original)):
+            vrai_open = open
+
+            def refuse(fichier, *a, **k):
+                if str(fichier) == s.BASE_FILE:
+                    raise PermissionError("accès refusé")
+                return vrai_open(fichier, *a, **k)
+
+            with mock.patch("builtins.open", refuse):
+                with self.assertRaises(PermissionError):
+                    s.ajouter_base({"url": "u1", "nom": "N"})
+            with open(s.BASE_FILE, "rb") as h:
+                self.assertEqual(h.read(), original)                   # intact, rien mis de côté
+            self.assertEqual(sorted(os.listdir(d)), ["recettes.json"])
+
     def test_migrer_base(self):
         import tempfile
         with tempfile.TemporaryDirectory() as d:

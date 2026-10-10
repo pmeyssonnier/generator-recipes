@@ -250,8 +250,17 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       localStorage.setItem(KEY, JSON.stringify({
         recettes: recettes.map(sansIndex), panier: [...st.panier], favs: [...st.favs]
       }));
-    } catch (e) { console.warn("Stockage impossible :", e); }
+      stockageAverti = false;
+    } catch (e) {
+      console.warn("Stockage impossible :", e);
+      if (!stockageAverti) {              // une seule alerte tant que ça échoue
+        stockageAverti = true;
+        toast("⚠ Stockage du navigateur plein : les recettes ne sont plus enregistrées ici. " +
+              "Exporte ta base (💾 Exporter) ou travaille avec le serveur Python.", 12000);
+      }
+    }
   }
+  let stockageAverti = false;
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem(KEY) || "null");
@@ -292,13 +301,13 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     return r;
   }
 
-  function toast(msg) {
+  function toast(msg, duree = 2500) {
     const t = document.createElement("div");
     t.textContent = msg;
     Object.assign(t.style, { position:"fixed", bottom:"20px", left:"50%", transform:"translateX(-50%)",
       background:"var(--text)", color:"var(--bg)", padding:"10px 18px", borderRadius:"8px", zIndex:99 });
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2500);
+    setTimeout(() => t.remove(), duree);
   }
 
   // ---------- Import JSON ----------
@@ -326,9 +335,20 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
   function valider() { save(); remplirCategories(); render(); }
 
+  // Un fichier JSON énorme figerait le navigateur et dépasserait le stockage local (≈ 5 Mo) :
+  // taille limitée (par fichier et pour l'ensemble d'un chargement), avec un message clair.
+  const MAX_JSON = 25 * 1024 * 1024;
+  const mo = n => (n / 1024 / 1024).toFixed(1).replace(".", ",");
   async function lireFichiers(files) {
-    let ajout = 0;
+    let ajout = 0, cumul = 0;
     for (const f of files) {
+      cumul += f.size;
+      if (f.size > MAX_JSON || cumul > MAX_JSON) {
+        alert(`Fichier trop volumineux : ${f.name} (${mo(f.size)} Mo).\n` +
+              `Maximum ${mo(MAX_JSON)} Mo par chargement : découpe le fichier ou exporte une sélection plus petite.`);
+        cumul -= f.size;
+        continue;
+      }
       try { ajout += importer(JSON.parse(await f.text())); }
       catch (e) { alert(`Fichier invalide : ${f.name}\n${e.message}`); }
     }
@@ -487,11 +507,19 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
 
   // ---------- Serveur Python local ----------
-  // Page servie par le serveur Python (localhost / réseau local) → même origine.
-  // Page servie par GitHub Pages ou ouverte en file:// → serveur local de l'appareil.
-  const SUR_SERVEUR = location.protocol.startsWith("http") &&
-    /^(localhost|127\.|\[::1\]|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
-  const API = SUR_SERVEUR ? "" : "http://localhost:8765";
+  // Page servie par le serveur Python, quel que soit son nom (localhost, IP du réseau local,
+  // monpc.local…) → l'API est sur la même origine : on le vérifie en interrogeant /api/ping.
+  // Page GitHub Pages ou ouverte en file:// → serveur local de l'appareil (http://localhost:8765).
+  const HORS_SERVEUR = location.protocol === "file:" || /(^|\.)github\.io$/i.test(location.hostname);
+  const apiPrete = (async () => {
+    if (!HORS_SERVEUR && location.protocol.startsWith("http")) {
+      try {
+        const r = await fetch("/api/ping");
+        if (r.ok && (await r.json()).ok === true) return "";
+      } catch { /* pas notre serveur : repli ci-dessous */ }
+    }
+    return "http://localhost:8765";
+  })();
   let busy = false;
 
   // POST pour tout ce qui écrit dans la base du serveur ; l'en-tête X-Recettes est exigé (anti-CSRF)
@@ -507,6 +535,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       : `Sauvegarde automatique : ${fichier || "recettes.json"}`;
   }
   async function api(path, { post = false } = {}) {
+    const API = await apiPrete;
     let r = await fetch(API + path, post && !serveurAncien ? { method: "POST", headers: { "X-Recettes": "1" } } : undefined);
     if (post && !serveurAncien && (r.status === 501 || r.status === 405)) {
       serveurAncien = true;
@@ -609,13 +638,14 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
 
   // ---------- Événements ----------
-  $("file").addEventListener("change", e => { lireFichiers(e.target.files); e.target.value = ""; });
+  // Copie de la liste : `value = ""` la vide, ce qui ne laissait lire que le premier fichier
+  $("file").addEventListener("change", e => { lireFichiers([...e.target.files]); e.target.value = ""; });
 
   document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("drop"); });
   document.addEventListener("dragleave", e => { if (!e.relatedTarget) document.body.classList.remove("drop"); });
   document.addEventListener("drop", e => {
     e.preventDefault(); document.body.classList.remove("drop");
-    if (e.dataTransfer.files.length) lireFichiers(e.dataTransfer.files);
+    if (e.dataTransfer.files.length) lireFichiers([...e.dataTransfer.files]);
   });
 
   const filtreChange = () => { st.surprise = null; st.visibles = PAGE; render(); };

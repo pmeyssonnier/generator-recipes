@@ -15,6 +15,7 @@ en tirer au sort et préparer une liste de courses.
 |---|---|
 | Import | Recherche par mot-clé sur Marmiton, ou import par URL depuis les sites de la liste `SITES` |
 | Sauvegarde | Automatique dans `recettes.json` + stockage du navigateur (l'ancien `recettes_marmiton.json` est renommé automatiquement au lancement) |
+| Base illisible | Si `recettes.json` est corrompu, il n'est jamais écrasé : à la prochaine importation il est conservé sous `recettes.json.corrompu-AAAAMMJJ-HHMMSS` (récupérable à la main) et une nouvelle base est créée ; un avertissement s'affiche dans la fenêtre du serveur |
 | Filtres | Texte libre, ingrédients avec / sans, temps max, note minimale, catégorie, favoris |
 | Affichage | 48 recettes à la fois, bouton « Afficher plus » (la page reste fluide avec plusieurs milliers de recettes) |
 | 🎲 Surprends-moi | 3 recettes tirées au hasard parmi les résultats filtrés |
@@ -51,7 +52,8 @@ une base chargée via **📂 Charger JSON**. Pour importer depuis une page ouver
   `https://pmeyssonnier.github.io`. Les appels venant d'autres sites sont refusés (403).
 - L'en-tête `Host` est vérifié (`localhost`, adresses IP locales ; réseau privé seulement avec
   `--lan`) : cela bloque le *DNS rebinding*. Autre nom d'hôte (ex. `monpc.local`) :
-  `RECETTES_HOTES=monpc.local`.
+  `RECETTES_HOTES=monpc.local`. La page détecte seule qu'elle est servie par le serveur (sonde `/api/ping` sur sa propre
+  origine) : sous n'importe quel nom ou adresse, elle appelle ce serveur et jamais `localhost`.
 - Le serveur ne sert **que** la page HTML : ni `.git/`, ni le code source, ni la base JSON.
 - L'import par URL est limité aux domaines de `SITES`. Les redirections sont suivies à la main
   et revalidées (domaine autorisé, pas de retour en `http`, `robots.txt`, 5 sauts maximum).
@@ -61,6 +63,10 @@ une base chargée via **📂 Charger JSON**. Pour importer depuis une page ouver
   La page en ligne (GitHub Pages) se met à jour seule : face à un serveur local plus ancien (sans
   `POST`), elle se rabat sur l'ancien `GET` et affiche « serveur ancien » — mets-le alors à jour
   (`git pull`, puis relance-le) pour bénéficier de la protection renforcée.
+- `/api/ping` ne révèle que le nom du fichier de la base (pas son chemin) ; les erreurs internes
+  renvoient un message générique (le détail reste dans la fenêtre du serveur).
+- Un fichier JSON importé est limité à 25 Mo (par chargement) ; si le stockage du navigateur
+  (≈ 5 Mo) est plein, une alerte invite à exporter la base.
 - Les pages téléchargées sont limitées à 5 Mo (compressées comme décompressées) et 200 pages
   restent en mémoire au maximum.
 - La page applique une politique CSP, n'accepte que des URL `http(s)` pour les liens et images
@@ -149,6 +155,18 @@ python tester_sources.py            # ou : python tester_sources.py quiche
 ```bash
 python -m unittest discover -s tests     # hors ligne : parseurs JSON-LD, listes de recettes, sources,
                                           # durées, Host, fichiers servis, redirections, base JSON
+```
+
+Les **tests de l'interface** (`tests/test_interface.py`, 22 tests) pilotent un vrai Chromium contre le vrai
+serveur (seules l'extraction d'une recette et la recherche sont simulées) et cliquent sur chaque bouton :
+Importer (recherche, URL, page de sélection), Exporter (téléchargements), Courses (copie dans le
+presse-papiers), favoris, fiche recette, filtres, tri, Surprends-moi, Vider, fermeture des fenêtres, plus
+le clavier, la pagination, les fichiers volumineux, le stockage plein, un nom d'hôte personnalisé et la
+compatibilité avec un ancien serveur. Ils sont ignorés si Playwright n'est pas installé :
+
+```bash
+pip install playwright && playwright install chromium
+python -m unittest tests.test_interface -v     # RECETTES_CHROMIUM=/chemin/chromium pour un Chromium existant
 ```
 
 Ces tests et une vérification `pyflakes` tournent automatiquement sur GitHub Actions
