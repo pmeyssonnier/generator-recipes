@@ -134,6 +134,17 @@ class Serveur(unittest.TestCase):
             urllib.request.urlopen(req)
         self.assertEqual(c.exception.code, 403)
 
+    def test_nom_d_hote_personnalise(self):
+        # RECETTES_HOTES=monpc.local : la page ET l'API sont servies sous ce nom (même origine)
+        h = {"Host": "monpc.local:8765"}
+        self.assertEqual(self.get("/api/ping", h)[0], 403)                       # inconnu par défaut
+        with mock.patch.object(s, "HOTES", s.HOTES | {"monpc.local"}):
+            self.assertEqual(self.get("/", h)[0], 200)
+            self.assertEqual(self.get("/api/ping", h)[0], 200)
+            h_origine = dict(h, Origin="http://monpc.local:8765")                # appel de la page elle-même
+            self.assertEqual(self.get("/api/ping", h_origine)[0], 200)
+            self.assertEqual(self.get("/api/ping", dict(h, Origin="http://evil.com"))[0], 403)
+
     def test_ping_annonce_la_version_de_l_api(self):
         code, body = self.get("/api/ping")
         self.assertEqual((code, json.loads(body)["api"]), (200, s.API_VERSION))

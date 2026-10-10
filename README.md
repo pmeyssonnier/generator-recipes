@@ -52,7 +52,8 @@ une base chargée via **📂 Charger JSON**. Pour importer depuis une page ouver
   `https://pmeyssonnier.github.io`. Les appels venant d'autres sites sont refusés (403).
 - L'en-tête `Host` est vérifié (`localhost`, adresses IP locales ; réseau privé seulement avec
   `--lan`) : cela bloque le *DNS rebinding*. Autre nom d'hôte (ex. `monpc.local`) :
-  `RECETTES_HOTES=monpc.local`.
+  `RECETTES_HOTES=monpc.local`. La page détecte seule qu'elle est servie par le serveur (sonde `/api/ping` sur sa propre
+  origine) : sous n'importe quel nom ou adresse, elle appelle ce serveur et jamais `localhost`.
 - Le serveur ne sert **que** la page HTML : ni `.git/`, ni le code source, ni la base JSON.
 - L'import par URL est limité aux domaines de `SITES`. Les redirections sont suivies à la main
   et revalidées (domaine autorisé, pas de retour en `http`, `robots.txt`, 5 sauts maximum).
