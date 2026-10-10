@@ -100,7 +100,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 .res details li{border:0;padding:1px 0}
 .res details ul,.res details ol{margin:4px 0 6px 18px;padding:0}
 [hidden]{display:none!important}
-  sup.frac{font-size:.7em;line-height:0;margin-left:1px}
+  sup.frac{font-size:.7em;line-height:0}
 .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .inline input[type=text]{flex:1;min-width:180px}
 .inline input[type=number]{width:70px;font:inherit;padding:7px;border:1px solid var(--line);border-radius:8px;
@@ -286,9 +286,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const norm = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const esc = s => String(s ?? "").replace(/[&<>"']/g,
     c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
-  // « 1 1/2 » → 1 suivi de 1/2 en petit, en exposant (nombre mixte)
-  const fractions = s => esc(s).replace(/(?<![\d\/.,])(\d+) (\d)\/([2-9])(?![\d\/])/g,
-    (m, e, a, b) => +a < +b ? `${e}<sup class="frac">${a}/${b}</sup>` : m);
+  // Fractions en petit, en exposant : « 1 1/2 » → 1 suivi de 1/2, « 1/4 càc » → 1/4 seul (numérateur < dénominateur)
+  const fractions = s => esc(s).replace(/(?<![\d\/.,])(?:(\d+) )?(\d)\/([2-9])(?![\d\/])/g,
+    (m, e, a, b) => +a < +b ? `${e ? e + " " : ""}<sup class="frac">${a}/${b}</sup>` : m);
   const num = v => { const n = parseFloat(String(v ?? "").replace(",", ".")); return isNaN(n) ? null : n; };
   const total = r => r.total_min || (((r.prep_min || 0) + (r.cuisson_min || 0)) || null);
   // Seules les URL http(s) sont acceptées (un JSON importé pourrait contenir « javascript: »)
