@@ -95,7 +95,19 @@ def trouver_entete(mots):
 
 
 # ---------- Nombres et ingrédients ----------
+def nombre_mixte(qte):
+    """« 11/2 » (1 écrit en grand, 1/2 en petit, mots recollés par l'extraction) → « 1 1/2 ».
+    Seule une fraction propre (numérateur < dénominateur) est séparée : « 10/4 » reste telle quelle."""
+    m = re.fullmatch(r"(\d+)(\d)/(\d)", qte)
+    if m and 0 < int(m.group(2)) < int(m.group(3)):
+        return f"{m.group(1)} {m.group(2)}/{m.group(3)}"
+    return qte
+
+
 def valeur(qte):
+    m = re.fullmatch(r"(\d+) (\d+)/(\d+)", qte)
+    if m:
+        return int(m.group(1)) + int(m.group(2)) / int(m.group(3))
     if qte in FRACTIONS:
         return FRACTIONS[qte]
     m = re.fullmatch(r"(\d+)([½¼¾⅓⅔])", qte)
@@ -223,7 +235,7 @@ def lire_page(page, numero, fichier, personnes):
         bloc = [m for m in zone if haut <= m["top"] < bas]
         etiquette = [m for m in bloc if (m["x0"] + m["x1"]) / 2 < x_premiere - ecart / 2]
         nombres = [m for m in bloc if (m["x0"] + m["x1"]) / 2 >= x_premiere - ecart / 2 and RE_NOMBRE.match(m["text"])]
-        qte = next((m["text"] for m in sorted(nombres, key=lambda m: m["top"]) if abs((m["x0"] + m["x1"]) / 2 - x_col) < ecart / 2), "")
+        qte = nombre_mixte(next((m["text"] for m in sorted(nombres, key=lambda m: m["top"]) if abs((m["x0"] + m["x1"]) / 2 - x_col) < ecart / 2), ""))
         # exposants (BE, (1)…) : petits caractères ; le renvoi (n) indique une note
         non_fourni, morceaux = False, []
         for m in sorted(etiquette, key=lambda m: (round(m["top"] / 3), m["x0"])):

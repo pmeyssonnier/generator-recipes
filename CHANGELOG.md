@@ -8,6 +8,12 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Corrigé
+- Source eFarmz (PDF) : une quantité comme « 1 » suivi de « 1/2 » en petit, lue « 11/2 », devient « 1 1/2 ».
+
+### Modifié
+- Les nombres mixtes (« 1 1/2 ») s'affichent avec la fraction en petit, en exposant, dans la fiche et dans les résultats d'import.
+
 ### Ajouté
 - Bouton **🗑 Supprimer** dans la fiche d'une recette : après confirmation, la recette est retirée de `recettes.json` (nouvelle
   route `POST /api/supprimer`, avec l'en-tête `X-Recettes`) puis du navigateur, favoris et courses compris. Sans serveur, ou avec un

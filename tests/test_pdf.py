@@ -181,6 +181,20 @@ class SourceEfarmz(unittest.TestCase):
             self.assertEqual(self.requete("/api/recipe?url=efarmz%3Av375.pdf%234", post=True)[0], 503)
         self.assertEqual(self.requete("/api/ping")[0], 200)
 
+class NombresMixtes(unittest.TestCase):
+    def test_fraction_recollee_separee(self):
+        self.assertEqual(pdf.nombre_mixte("11/2"), "1 1/2")
+        self.assertEqual(pdf.nombre_mixte("23/4"), "2 3/4")
+        self.assertEqual(pdf.nombre_mixte("101/2"), "10 1/2")
+
+    def test_autres_quantites_inchangees(self):
+        for q in ("1/2", "1", "1½", "2,5", "10/4", "15/4", "12", ""):
+            self.assertEqual(pdf.nombre_mixte(q), q)
+
+    def test_valeur_nombre_mixte(self):
+        self.assertEqual(pdf.valeur("1 1/2"), 1.5)
+        self.assertEqual(pdf.valeur("1/2"), 0.5)
+
 
 if __name__ == "__main__":
     unittest.main()
