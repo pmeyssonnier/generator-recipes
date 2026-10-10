@@ -25,6 +25,7 @@ HOST = "0.0.0.0" if LAN else "127.0.0.1"
 DIR = os.path.dirname(os.path.abspath(__file__))
 NOMS_PAGE = ("generateur-recettes.html", "generateur_recettes.html")
 BASE_FILE = os.path.join(DIR, "recettes.json")
+DOSSIER_PDF = os.path.join(DIR, "eFarmz")                        # PDF de recettes déposés ici (source « eFarmz »)
 ANCIEN_BASE_FILE = os.path.join(DIR, "recettes_marmiton.json")   # ancien nom, migré au lancement
 BASE = "https://www.marmiton.org"
 PAUSE = 1.5  # secondes minimum entre deux requêtes sortantes
@@ -211,6 +212,12 @@ def source_de(url):
 
 
 # ---------------- Parsing (identique au script Colab) ----------------
+def sans_accents(texte):
+    """Minuscules sans accents : « Crème » → « creme », « Œufs » → « oeufs » (filtres)."""
+    texte = str(texte or "").lower().replace("œ", "oe").replace("æ", "ae")
+    return unicodedata.normalize("NFD", texte).encode("ascii", "ignore").decode().strip()
+
+
 def nettoyer_nom(nom):
     """Retire le suffixe SEO « : la meilleure recette » ajouté par Marmiton."""
     nom = html.unescape(nom or "").replace(" ", " ")
@@ -407,7 +414,117 @@ SOURCES = {
                  "aide": "Recherche libre (ex. blanquette, curry de légumes)"},
     "ptitchef": {"nom": "PtitChef", "chercher": recherche_ptitchef,
                  "aide": "Pages thématiques : un plat ou un ingrédient (ex. lasagnes, quiche, tiramisu)"},
+    "efarmz": {"nom": "eFarmz (PDF)", "chercher": lambda q, n: lister_pdf(q, n), "dossier": True,
+               "aide": "PDF déposés dans le dossier eFarmz/ à côté du serveur (filtre facultatif)"},
 }
+
+
+# ---------------- Source « eFarmz » : PDF déposés dans le dossier eFarmz/ ----------------
+PREFIXE_PDF = "efarmz:"            # identifiant d'une recette de PDF : efarmz:fichier.pdf#page
+MAX_PDF_OCTETS = 200 * 1024 * 1024
+MAX_PDF_FICHIERS = 200
+_cache_pdf = {}                    # (fichier, taille, date, personnes) -> (recettes, rapport)
+_verrou_pdf = threading.Lock()
+
+
+class PdfIndisponible(Exception):
+    """Extraction PDF impossible : pdfplumber (ou pdf_recettes.py) manque."""
+
+
+MSG_PDF_INDISPONIBLE = "Extraction PDF indisponible : installe pdfplumber (pip install pdfplumber)"
+
+
+def _module_pdf():
+    """Le module d'extraction, ou PdfIndisponible (il est facultatif : le serveur marche sans)."""
+    try:
+        import pdf_recettes
+    except ImportError:
+        raise PdfIndisponible(MSG_PDF_INDISPONIBLE) from None
+    if not pdf_recettes.disponible():
+        raise PdfIndisponible(MSG_PDF_INDISPONIBLE)
+    return pdf_recettes
+
+
+def fichiers_pdf():
+    """Noms des PDF du dossier eFarmz/ (créé s'il manque), triés. Les liens et sous-dossiers sont ignorés."""
+    os.makedirs(DOSSIER_PDF, exist_ok=True)
+    noms = [n for n in sorted(os.listdir(DOSSIER_PDF), key=str.lower)
+            if n.lower().endswith(".pdf") and os.path.isfile(os.path.join(DOSSIER_PDF, n))
+            and not os.path.islink(os.path.join(DOSSIER_PDF, n))]
+    return noms[:MAX_PDF_FICHIERS]
+
+
+def lire_pdf(nom, personnes=2):
+    """(recettes, rapport) d'un PDF du dossier eFarmz/ ; résultat gardé en mémoire tant que le fichier ne change pas."""
+    if nom not in fichiers_pdf():                     # uniquement un nom présent dans le dossier : pas de chemin
+        raise ValueError(f"PDF introuvable dans le dossier {os.path.basename(DOSSIER_PDF)}/ : {nom[:80]}")
+    chemin = os.path.join(DOSSIER_PDF, nom)
+    st = os.stat(chemin)
+    if st.st_size > MAX_PDF_OCTETS:
+        raise ValueError(f"{nom} : fichier trop gros ({st.st_size // 2**20} Mo, maximum {MAX_PDF_OCTETS // 2**20} Mo)")
+    cle = (nom, st.st_size, st.st_mtime_ns, personnes)
+    with _verrou_pdf:                                 # une extraction à la fois (CPU, mémoire)
+        if cle not in _cache_pdf:
+            if len(_cache_pdf) >= 5:
+                _cache_pdf.clear()
+            pdf = _module_pdf()
+            try:
+                _cache_pdf[cle] = pdf.convertir(chemin, personnes)
+            except pdf.PdfIndisponible as e:
+                raise PdfIndisponible(str(e)) from None
+        return _cache_pdf[cle]
+
+
+def recette_pdf(nom, numero, recette):
+    """Recette du PDF au format de la base : source « eFarmz · fichier p.N », pas d'URL."""
+    r = {k: v for k, v in recette.items() if k != "image_page"}
+    r["url"] = ""
+    r["source"] = f"eFarmz · {nom} p.{numero}"
+    r["categorie"] = r.get("categorie") or "eFarmz"
+    return r
+
+
+def lister_pdf(q="", n=200, personnes=2):
+    """Recettes extraites des PDF du dossier, pour l'aperçu : titre, détail, alertes, miniature, texte.
+    Un PDF illisible donne une ligne sans url (« erreur »). q filtre sur le titre ou le nom du fichier."""
+    _module_pdf()
+    noms = fichiers_pdf()
+    if not noms:
+        return [{"url": "", "titre": f"Aucun PDF dans le dossier {os.path.basename(DOSSIER_PDF)}/ "
+                                      "(à côté de serveur_recettes.py) : dépose tes fiches puis relance",
+                 "erreur": True}]
+    mot, res = sans_accents(q), []
+    for nom in noms:
+        try:
+            recettes, rapport = lire_pdf(nom, personnes)
+        except (ValueError, PdfIndisponible) as e:
+            res.append({"url": "", "titre": f"{nom} : {e}", "erreur": True})
+            continue
+        res.append({"url": "", "titre": f"{nom} : {len(recettes)} recette(s) lue(s)", "info": True})
+        for numero, rec, alertes in rapport:
+            if mot and mot not in sans_accents(rec["nom"] + " " + nom):
+                continue
+            res.append({"url": f"{PREFIXE_PDF}{nom}#{numero}", "titre": rec["nom"], "fichier": nom, "page": numero,
+                        "detail": f"{len(rec['ingredients'])} ingrédients, {len(rec['etapes'])} étapes"
+                                  + (f", photo p.{rec['image_page']}" if rec.get("image") else ", sans photo"),
+                        "alertes": alertes, "image": rec.get("image", ""),
+                        "ingredients": rec["ingredients"], "etapes": rec["etapes"]})
+            if sum(1 for x in res if x["url"]) >= n:
+                return res
+    return res
+
+
+def importer_pdf(ident, personnes=2):
+    """Recette désignée par « efarmz:fichier.pdf#page » (ne touche pas la base : l'appelant l'ajoute)."""
+    nom, _, page = ident[len(PREFIXE_PDF):].rpartition("#")
+    if not nom or not page.isdigit():
+        raise ValueError("Identifiant de recette PDF invalide")
+    _module_pdf()
+    recettes, rapport = lire_pdf(nom, personnes)
+    for numero, rec, _alertes in rapport:
+        if numero == int(page):
+            return recette_pdf(nom, numero, rec)
+    raise ValueError(f"Pas de recette à la page {page} de {nom}")
 
 
 def search_recipes(q, n=10, source="marmiton"):
@@ -494,7 +611,7 @@ def ajouter_base(rec):
         for r in existantes:
             r["nom"] = nettoyer_nom(r.get("nom"))      # nettoie aussi les anciens imports
             base[r.get("url") or r.get("nom")] = r
-        base[rec["url"]] = rec
+        base[rec.get("url") or rec["nom"]] = rec      # sans URL (recette de PDF) : le nom
         tmp = BASE_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(list(base.values()), f, ensure_ascii=False, indent=2)
@@ -671,16 +788,19 @@ class Handler(BaseHTTPRequestHandler):
                     r["nom"] = nettoyer_nom(r.get("nom"))
                 return self.send_json(base)
             if u.path == "/api/sources":
-                return self.send_json([{"id": k, "nom": v["nom"], "aide": v["aide"]}
+                return self.send_json([{"id": k, "nom": v["nom"], "aide": v["aide"], "dossier": bool(v.get("dossier"))}
                                        for k, v in SOURCES.items()])
             if u.path == "/api/search":
                 q = qs.get("q", "").strip()
-                if not q:
-                    return self.send_json({"erreur": "Paramètre q manquant"}, 400)
-                n = entier(qs.get("n"), 10, 1, 50)
                 source = qs.get("source", "marmiton")
                 if source not in SOURCES:
                     return self.send_json({"erreur": f"Source inconnue : {source}"}, 400)
+                if SOURCES[source].get("dossier"):             # PDF d'un dossier : pas de recherche en ligne, filtre facultatif
+                    return self.send_json(lister_pdf(q, entier(qs.get("n"), 200, 1, 500),
+                                                     entier(qs.get("p"), 2, 1, 12)))
+                if not q:
+                    return self.send_json({"erreur": "Paramètre q manquant"}, 400)
+                n = entier(qs.get("n"), 10, 1, 50)
                 return self.send_json(search_recipes(q, n, source))
             if u.path == "/api/liste":
                 url = qs.get("url", "").strip()
@@ -691,6 +811,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(lister_page(url, n))
             if u.path == "/api/recipe":
                 url = qs.get("url", "").strip()
+                if url.startswith(PREFIXE_PDF):
+                    rec = importer_pdf(url, entier(qs.get("p"), 2, 1, 12))
+                    ajouter_base(rec)
+                    return self.send_json(rec)
                 if not url_autorisee(url):
                     return self.send_json({"erreur": f"Site non autorisé : {domaine(url)} "
                                                      "(ajoute-le dans SITES de serveur_recettes.py)"}, 400)
@@ -702,6 +826,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"erreur": str(e)}, 400)
         except AccesInterdit as e:
             self.send_json({"erreur": str(e)}, 403)
+        except PdfIndisponible as e:
+            self.send_json({"erreur": str(e)}, 503)
         except ReponseTropGrosse as e:
             self.send_json({"erreur": str(e)}, 502)
         except HTTPError as e:

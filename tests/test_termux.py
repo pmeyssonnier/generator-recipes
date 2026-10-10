@@ -80,11 +80,12 @@ class ScriptsTermux(unittest.TestCase):
         ecrire(os.path.join(self.dossier, "recettes_marmiton.json"), '[{"nom": "ma recette"}]', executable=False)
         r = self.lancer("Recettes-maj", RECETTES_DOSSIER=self.dossier)
         self.assertEqual(r.returncode, 0, r.stderr)
-        for nom in ("serveur_recettes.py", "generateur-recettes.html"):
+        for nom in ("serveur_recettes.py", "generateur-recettes.html", "pdf_recettes.py"):
             self.assertEqual(self.lire(self.dossier, nom), self.lire(RACINE, nom), nom)
         self.assertEqual(self.lire(self.dossier, "recettes_marmiton.json"), '[{"nom": "ma recette"}]')
         self.assertEqual(sorted(os.listdir(self.dossier)),
-                         ["generateur-recettes.html", "recettes_marmiton.json", "serveur_recettes.py"], "aucun reste .tmp")
+                         ["generateur-recettes.html", "pdf_recettes.py", "recettes_marmiton.json", "serveur_recettes.py"],
+                         "aucun reste .tmp")
         self.assertTrue(all("/v1.0.0/" in u for u in self.journal_lignes()), "version par défaut épinglée")
         self.assertIn("serveur_recettes ", r.stdout)                    # --version affichée
 
@@ -102,6 +103,14 @@ class ScriptsTermux(unittest.TestCase):
         self.assertIn("rien n'a été modifié", r.stdout)
         for nom in ("serveur_recettes.py", "generateur-recettes.html"):
             self.assertEqual(self.lire(self.dossier, nom), "ANCIEN", f"{nom} modifié malgré l'échec")
+        self.assertEqual(sorted(os.listdir(self.dossier)), ["generateur-recettes.html", "serveur_recettes.py"])
+
+    def test_maj_module_pdf_facultatif(self):
+        """Une version sans pdf_recettes.py (ex. v1.0.0) se met quand même à jour."""
+        ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
+        r = self.lancer("Recettes-maj", RECETTES_DOSSIER=self.dossier, FAUX_ECHEC_SUR="pdf_recettes.py")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("eFarmz (PDF) restera indisponible", r.stdout)
         self.assertEqual(sorted(os.listdir(self.dossier)), ["generateur-recettes.html", "serveur_recettes.py"])
 
     def test_maj_dossier_introuvable(self):

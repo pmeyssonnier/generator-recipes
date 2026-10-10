@@ -12,5 +12,12 @@ for f in serveur_recettes.py generateur-recettes.html; do
   fi
 done
 mv serveur_recettes.py.tmp serveur_recettes.py && mv generateur-recettes.html.tmp generateur-recettes.html
+# Extraction de PDF (source eFarmz) : facultative, absente des versions plus anciennes
+if curl -fsSL "$BASE/pdf_recettes.py" -o pdf_recettes.py.tmp; then
+  mv pdf_recettes.py.tmp pdf_recettes.py
+else
+  rm -f pdf_recettes.py.tmp
+  echo "pdf_recettes.py absent de la version $VERSION : la source eFarmz (PDF) restera indisponible."
+fi
 echo "Mise à jour terminée :"; python serveur_recettes.py --version
 read -r -p "Entrée pour fermer" || true

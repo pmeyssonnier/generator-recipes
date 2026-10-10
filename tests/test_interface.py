@@ -13,6 +13,7 @@ import json
 import os
 import socket
 import re
+import shutil
 import sys
 import tempfile
 import threading
@@ -22,6 +23,7 @@ from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import pdf_recettes  # noqa: E402
 import serveur_recettes as s  # noqa: E402
 
 try:
@@ -196,6 +198,16 @@ class Interface(unittest.TestCase):
         self.assertEqual(self.page.get_attribute("#dLink", "href"), "#")
         self.assertEqual(self.page.eval_on_selector("#dLink", "e => e.style.display"), "none")
 
+    def test_image_integree_d_un_pdf(self):
+        """Une image « data:image/png;base64 » (import depuis un PDF) s'affiche ; un data: dangereux est refusé."""
+        png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+        self.ouvrir()
+        self.charger([{"nom": "Avec photo", "image": png, "ingredients": ["a"]},
+                      {"nom": "Piège svg", "image": "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=", "ingredients": ["b"]},
+                      {"nom": "Piège html", "image": "data:text/html;base64,PGI+", "ingredients": ["c"]}])
+        self.assertEqual(self.page.eval_on_selector_all(".card img", "els => els.map(e => e.getAttribute('src'))"), [png])
+        self.page.wait_for_function("() => [...document.querySelectorAll('.card img')].every(i => i.complete && i.naturalWidth === 1)")
+
     def test_favoris_independants_sans_url(self):
         self.ouvrir()
         self.charger([{"nom": "A sans url", "ingredients": ["a"], "note": 5}, {"nom": "B sans url", "ingredients": ["b"], "note": 4}])
@@ -271,6 +283,49 @@ class Interface(unittest.TestCase):
         self.page.fill("#impUrl", "http://127.0.0.1/x")
         self.page.click("#impUrlGo")
         self.attendre_journal("Site non autorisé")
+
+    @unittest.skipUnless(pdf_recettes.disponible(), "pdfplumber non installé")
+    def test_import_pdf_efarmz(self):
+        """Source eFarmz : lecture du dossier de PDF, extraction visible, sélection, import avec photo, affichage."""
+        dossier = os.path.join(self.tmp.name, "eFarmz")
+        os.makedirs(dossier)
+        shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "fiches.pdf"),
+                    os.path.join(dossier, "v375.pdf"))
+        p = mock.patch.object(s, "DOSSIER_PDF", dossier)
+        p.start()
+        self.addCleanup(p.stop)
+        s._cache_pdf.clear()
+        self.ouvrir()
+        self.ouvrir_import()
+        self.page.select_option("#impSrc", "efarmz")
+        self.assertEqual(self.page.inner_text("#impSearch"), "Lire les PDF")
+        self.assertTrue(self.page.is_hidden("#impN") and self.page.is_visible("#impPers"))
+        self.page.click("#impSearch")                                        # aucun mot-clé nécessaire
+        self.page.wait_for_function("() => document.querySelectorAll('#impRes input').length === 3", polling=100)
+        self.attendre_journal("3 recettes extraite")
+        journal = self.page.inner_text("#impLog")
+        self.assertIn("📄 v375.pdf : 3 recette(s) lue(s)", journal)
+        self.assertIn("✓ Steak de bœuf et frites de patates douces (p.2) — 10 ingrédients, 6 étapes, photo p.1", journal)
+        self.assertIn("⚠ Œufs cocotte (p.4)", journal)                       # alerte d'extraction visible
+        self.assertEqual(self.page.locator("#impRes img").count(), 3)         # miniatures
+        self.page.locator("#impRes details").first.locator("summary").click()
+        self.assertIn("Ingrédients", self.page.locator("#impRes details").first.inner_text())     # aperçu du contenu extrait
+        cases = self.page.locator("#impRes input")
+        cases.nth(0).uncheck()
+        cases.nth(2).uncheck()                                                # seule « Œufs cocotte » reste cochée
+        self.page.click("#impGo")
+        self.attendre_journal("Terminé : 1/1")
+        self.assertIn("[1/1] ✓ Œufs cocotte", self.page.inner_text("#impLog"))
+        self.page.keyboard.press("Escape")
+        self.assertEqual(self.noms_affiches(), ["Œufs cocotte"])
+        self.page.wait_for_function("() => [...document.querySelectorAll('.card img')].every(i => i.complete && i.naturalWidth > 0)")
+        self.assertEqual(self.page.locator(".card img").count(), 1)           # la photo du PDF est affichée
+        self.assertEqual([r["nom"] for r in s.lire_base()], ["Œufs cocotte"])  # et sauvegardée côté serveur
+        self.page.click("#btnImport")                                         # relire : « déjà en base »
+        self.page.click("#impSearch")
+        self.page.wait_for_function("() => document.querySelectorAll('#impRes input').length === 3", polling=100)
+        self.assertEqual(self.page.locator("#impRes input:checked").count(), 2)
+        self.assertIn("déjà en base", self.page.inner_text("#impRes"))
 
     def test_filtres_sur_recettes_importees(self):
         self.ouvrir()
@@ -460,7 +515,7 @@ class Interface(unittest.TestCase):
         self.ouvrir_import()
         self.assertIn("serveur", self.page.inner_text("#srvStatus"))
         sources = self.page.eval_on_selector_all("#impSrc option", "els => els.map(e => e.textContent)")
-        self.assertEqual(sources, ["Marmiton", "PtitChef"])             # fournies par le serveur
+        self.assertEqual(sources, ["Marmiton", "PtitChef", "eFarmz (PDF)"])             # fournies par le serveur
         aide = self.page.inner_text("#impSrcAide")
         self.page.select_option("#impSrc", "ptitchef")
         self.assertNotEqual(self.page.inner_text("#impSrcAide"), aide)

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https: http:; connect-src 'self' http://localhost:8765; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https: http: data:; connect-src 'self' http://localhost:8765; base-uri 'none'; form-action 'none'">
 <title>Générateur de recettes</title>
 <style>
 :root{
@@ -93,7 +93,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 .srv.off{background:var(--ko-soft);color:var(--ko)}
 .res{list-style:none;padding:0;margin:10px 0}
 .res li{padding:6px 0;border-bottom:1px solid var(--line)}
-.res label{display:flex;gap:8px;cursor:pointer}
+.res label{display:flex;gap:8px;cursor:pointer;align-items:center}
+.res details{margin:4px 0 0 26px;font-size:.85rem}
+.res details li{border:0;padding:1px 0}
+.res details ul,.res details ol{margin:4px 0 6px 18px;padding:0}
+[hidden]{display:none!important}
 .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .inline input[type=text]{flex:1;min-width:180px}
 .inline input[type=number]{width:70px;font:inherit;padding:7px;border:1px solid var(--line);border-radius:8px;
@@ -202,6 +206,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     <div class="inline">
       <input type="text" id="impQ" placeholder="ex. blanquette, curry de légumes…">
       <input type="number" id="impN" value="10" min="1" max="50" title="Nombre max de résultats">
+      <input type="number" id="impPers" value="2" min="1" max="12" title="Quantités pour N personnes (colonne 1p…6p du PDF)" hidden>
       <button class="primary" id="impSearch">Rechercher</button>
     </div>
     <ul class="res" id="impRes"></ul>
@@ -281,6 +286,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const total = r => r.total_min || (((r.prep_min || 0) + (r.cuisson_min || 0)) || null);
   // Seules les URL http(s) sont acceptées (un JSON importé pourrait contenir « javascript: »)
   const urlSure = u => /^https?:\/\//i.test(String(u ?? "").trim()) ? String(u).trim() : "";
+  // Image : URL http(s), ou image intégrée (data:image/jpeg|png|webp|gif;base64, import depuis un PDF)
+  const imageSure = u => /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\/=]+$/i.test(String(u ?? "").trim())
+    ? String(u).trim() : urlSure(u);
   const fmtMin = m => m == null ? "?" : m >= 60 ? `${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")}` : `${m} min`;
   const catOf = r => Array.isArray(r.categorie) ? r.categorie.join(", ") : (r.categorie || "");
   const nettoyerNom = s => String(s || "").replace(/ /g, " ")
@@ -292,7 +300,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   function indexer(r) {
     r.nom = nettoyerNom(r.nom);
     r.url = urlSure(r.url);
-    r.image = urlSure(r.image);
+    r.image = imageSure(r.image);
     if (!r.source && r.url) { try { r.source = new URL(r.url).hostname.replace(/^www\./, ""); } catch {} }
     r._ing = norm((r.ingredients || []).join(" | "));
     r._txt = norm([r.nom, catOf(r), r.cuisine, r.mots_cles, r.source].flat().join(" "));
@@ -566,26 +574,56 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   function log(msg) { const l = $("impLog"); l.textContent += msg + "\n"; l.scrollTop = l.scrollHeight; }
 
   async function rechercher() {
-    const q = $("impQ").value.trim(); if (!q) return;
-    const n = +$("impN").value || 10;
+    const q = $("impQ").value.trim();
+    const dossier = sourceDossier();
+    if (!q && !dossier) return;                       // un dossier de PDF se lit sans mot-clé
+    const n = dossier ? 500 : (+$("impN").value || 10);
     const src = $("impSrc").value;
     const nomSrc = $("impSrc").selectedOptions[0]?.textContent || src;
-    $("impRes").innerHTML = ""; log(`🔎 Recherche « ${q} » sur ${nomSrc}…`);
+    $("impRes").innerHTML = "";
+    log(dossier ? `📂 Lecture des PDF (${nomSrc}), pour ${pluriel(persPdf(), "personne")}… peut prendre un moment`
+                : `🔎 Recherche « ${q} » sur ${nomSrc}…`);
     $("impSearch").disabled = true;
     try {
-      const res = await api(`/api/search?source=${encodeURIComponent(src)}&q=${encodeURIComponent(q)}&n=${n}`);
+      const res = await api(`/api/search?source=${encodeURIComponent(src)}&q=${encodeURIComponent(q)}&n=${n}&p=${persPdf()}`);
       afficherResultats(res);
-      log(`${res.length} résultat(s)`);
+      if (dossier) journalExtraction(res);
+      else log(`${res.length} résultat(s)`);
     } catch (e) { log("✗ " + e.message); }
     $("impSearch").disabled = false;
   }
 
+  // Source « dossier de PDF » (eFarmz) : pas de mot-clé obligatoire, quantités pour N personnes
+  const sourceDossier = () => !!sources.find(x => x.id === $("impSrc").value)?.dossier;
+  const persPdf = () => Math.min(12, Math.max(1, +$("impPers").value || 2));
+  // Étapes de l'extraction, une ligne par PDF puis par recette (comme l'import Marmiton)
+  function journalExtraction(res) {
+    const recs = res.filter(x => x.url);
+    for (const x of res) {
+      if (!x.url) log(x.erreur ? "✗ " + x.titre : "📄 " + x.titre);
+      else {
+        log(`${x.alertes?.length ? "⚠" : "✓"} ${nettoyerNom(x.titre)} (p.${x.page}) — ${x.detail}`);
+        for (const a of x.alertes || []) log("      → " + a);
+      }
+    }
+    log(recs.length ? `${pluriel(recs.length, "recette")} extraite(s) : coche puis « Importer la sélection »`
+                    : "Aucune recette extraite");
+  }
+
   function afficherResultats(res) {
     const connues = new Set(recettes.map(r => r.url));
+    const noms = new Set(recettes.map(r => r.nom));
     $("impRes").innerHTML = res.length ? res.map(x => {
-      const deja = connues.has(x.url);
+      if (!x.url) return `<li><i class="meta">${esc(x.titre)}</i></li>`;          // ligne d'information (PDF lu, erreur)
+      const pdf = !!x.fichier;
+      const deja = connues.has(x.url) || (pdf && noms.has(nettoyerNom(x.titre)));
+      const miniature = x.image ? `<img src="${esc(imageSure(x.image))}" alt="" width="56" height="42"
+        style="object-fit:cover;border-radius:6px;vertical-align:middle">` : "";
+      const corps = pdf ? `<details><summary class="meta">${esc(x.detail || "")}${x.alertes?.length ? " · ⚠ " + esc(x.alertes.join(" ; ")) : ""}</summary>
+        <b>Ingrédients</b><ul>${(x.ingredients || []).map(i => `<li>${esc(i)}</li>`).join("")}</ul>
+        <b>Étapes</b><ol>${(x.etapes || []).map(i => `<li>${esc(i)}</li>`).join("")}</ol></details>` : "";
       return `<li><label><input type="checkbox" value="${esc(x.url)}" ${deja ? "" : "checked"}>
-        <span>${esc(x.titre)}${deja ? ' <i class="meta">(déjà en base)</i>' : ""}</span></label></li>`;
+        ${miniature}<span>${esc(x.titre)}${deja ? ' <i class="meta">(déjà en base)</i>' : ""}</span></label>${corps}</li>`;
     }).join("") : "<li><i>Aucun résultat</i></li>";
   }
 
@@ -625,7 +663,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     try {
       for (const [i, u] of urls.entries()) {
         try {
-          const r = await api(`/api/recipe?url=${encodeURIComponent(u)}`, { post: true });
+          const r = await api(`/api/recipe?url=${encodeURIComponent(u)}&p=${persPdf()}`, { post: true });
           importer([r], { differe: true }); ok++;
           log(`[${i + 1}/${urls.length}] ✓ ${nettoyerNom(r.nom)}`);
         } catch (e) { log(`[${i + 1}/${urls.length}] ✗ ${u} → ${e.message}`); }
@@ -755,6 +793,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   function majAideSource() {
     const s = sources.find(x => x.id === $("impSrc").value);
     $("impSrcAide").textContent = s ? s.aide : "";
+    const dossier = !!s?.dossier;
+    $("impN").hidden = dossier;
+    $("impPers").hidden = !dossier;
+    $("impQ").placeholder = dossier ? "Filtrer par titre ou fichier (facultatif)" : "ex. blanquette, curry de légumes…";
+    $("impSearch").textContent = dossier ? "Lire les PDF" : "Rechercher";
   }
   $("impSrc").addEventListener("change", majAideSource);
 

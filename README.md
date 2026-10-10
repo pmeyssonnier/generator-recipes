@@ -13,7 +13,7 @@ en tirer au sort et préparer une liste de courses.
 
 | Fonction | Détail |
 |---|---|
-| Import | Recherche par mot-clé sur Marmiton, ou import par URL depuis les sites de la liste `SITES` |
+| Import | Recherche par mot-clé sur Marmiton, import par URL depuis les sites de la liste `SITES`, ou lecture de PDF de fiches recettes (eFarmz, avec photo) |
 | Sauvegarde | Automatique dans `recettes.json` + stockage du navigateur (l'ancien `recettes_marmiton.json` est renommé automatiquement au lancement) |
 | Base illisible | Si `recettes.json` est corrompu, il n'est jamais écrasé : à la prochaine importation il est conservé sous `recettes.json.corrompu-AAAAMMJJ-HHMMSS` (récupérable à la main) et une nouvelle base est créée ; un avertissement s'affiche dans la fenêtre du serveur |
 | Filtres | Texte libre, ingrédients avec / sans, temps max, note minimale, catégorie, favoris |
@@ -103,7 +103,7 @@ python serveur_recettes.py
 #### Raccourcis et mise à jour (Termux)
 
 Le dossier `termux/` fournit deux scripts : **`Recettes`** (lance le serveur, avec `termux-wake-lock`)
-et **`Recettes-maj`** (télécharge `serveur_recettes.py` et `generateur-recettes.html` ; la base n'est
+et **`Recettes-maj`** (télécharge `serveur_recettes.py`, `generateur-recettes.html` et, si la version le propose, `pdf_recettes.py` (source eFarmz) ; la base n'est
 pas touchée, et rien n'est remplacé si un téléchargement échoue). Installation en une commande :
 
 ```bash
@@ -141,6 +141,7 @@ navigateur (generateur-recettes.html)
    ▼
 serveur_recettes.py  (127.0.0.1:8765)
    │  urllib → site source, 1,5 s minimum entre deux requêtes
+   │  eFarmz/*.pdf → pdf_recettes.py (pdfplumber, facultatif)
    └─ fusionne chaque recette dans recettes.json
 ```
 
@@ -184,14 +185,39 @@ actuelle. Sous Safari sur Mac, la touche Tab n'atteint les boutons que si l'opti
 Pour Safari, le parcours *page en ligne → serveur local* n'est pas couvert par les tests (voir la
 note dans « Version en ligne ») ; la page servie par le serveur (`http://localhost:8765/`) l'est.
 
+## Importer des PDF de fiches recettes (eFarmz)
+
+La source **eFarmz (PDF)** de la fenêtre d'import lit les PDF que tu as déposés dans le dossier
+**`eFarmz/`**, créé à côté de `serveur_recettes.py` (donc à côté de `recettes.json`). Aucune connexion à un site : tout
+se passe sur ton appareil. (Une récupération automatique depuis ton compte pourra venir plus tard.)
+
+1. Dépose tes PDF dans `eFarmz/` (sur Termux : `cp /storage/emulated/0/Download/v375.pdf eFarmz/`).
+2. 🌐 Importer → source **eFarmz (PDF)** → choisis le nombre de personnes (colonne « 1p … 6p » du tableau) →
+   **Lire les PDF**. Un filtre (titre ou nom de fichier) est facultatif.
+3. Le journal montre l'extraction, PDF par PDF puis recette par recette (`✓ Nom (p.2) — 10 ingrédients, 6 étapes, photo p.1`),
+   avec les ⚠ à vérifier. Chaque recette a sa miniature et un aperçu déroulant (ingrédients, étapes).
+4. Coche une ou plusieurs recettes (ou tout) → **Importer la sélection** : elles sont enregistrées dans `recettes.json`
+   avec leur photo et s'affichent dans l'application.
+
+Une page de détail est reconnue à son tableau de quantités (« 1p … 6p ») ; la photo est la plus grande image de la page,
+ou de la page photo qui la précède (`PHOTO_PAGE` dans `pdf_recettes.py`). Les photos sont réduites (400 px, JPEG) et
+stockées dans le JSON : compte 20 à 60 Ko par recette, et surveille la limite de stockage du navigateur (≈ 5 Mo) si ta
+base devient grande. Les PDF scannés (images sans texte) ne sont pas lus : l'OCR n'est pas pris en charge.
+
+Cette source demande une dépendance **facultative** : `pip install pdfplumber` (le reste de l'application n'en a pas besoin).
+Sans elle, la source répond « Extraction PDF indisponible ». Sur Termux, l'installation de pdfplumber peut être
+difficile (dépendances compilées) : dans ce cas, convertis tes PDF avec `python pdf_recettes.py fichier.pdf` sur un
+ordinateur (ou Colab) et charge le JSON produit avec « 📂 Charger JSON ».
+
 ## Tests
 
 ```bash
 python -m unittest discover -s tests     # hors ligne : parseurs JSON-LD, listes de recettes, sources,
-                                          # durées, Host, fichiers servis, redirections, base JSON
+                                          # durées, Host, fichiers servis, redirections, base JSON,
+                                          # extraction de PDF (si pdfplumber est installé)
 ```
 
-Les **tests de l'interface** (`tests/test_interface.py`, 22 tests) pilotent un vrai Chromium contre le vrai
+Les **tests de l'interface** (`tests/test_interface.py`, 25 tests) pilotent un vrai Chromium contre le vrai
 serveur (seules l'extraction d'une recette et la recherche sont simulées) et cliquent sur chaque bouton :
 Importer (recherche, URL, page de sélection), Exporter (téléchargements), Courses (copie dans le
 presse-papiers), favoris, fiche recette, filtres, tri, Surprends-moi, Vider, fermeture des fenêtres, plus
