@@ -200,7 +200,7 @@ class Interface(unittest.TestCase):
 
     def test_image_integree_d_un_pdf(self):
         """Une image « data:image/png;base64 » (import depuis un PDF) s'affiche ; un data: dangereux est refusé."""
-        png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=="
+        png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
         self.ouvrir()
         self.charger([{"nom": "Avec photo", "image": png, "ingredients": ["a"]},
                       {"nom": "Piège svg", "image": "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=", "ingredients": ["b"]},
