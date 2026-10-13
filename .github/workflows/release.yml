@@ -54,3 +54,9 @@ jobs:
             fi
             exit 1
           fi
+      - name: Archive à distribuer (zip) jointe à la release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python outils/construire_archive.py .
+          gh release upload "$GITHUB_REF_NAME" "recettes-$GITHUB_REF_NAME.zip" --clobber

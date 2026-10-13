@@ -46,6 +46,16 @@ Sans serveur, `generateur-recettes.html` s'ouvre aussi en double-clic pour consu
 une base chargée via **📂 Charger JSON**. Pour importer depuis une page ouverte en
 `file://`, ouvre plutôt <http://localhost:8765> (ou ajoute `null` à `RECETTES_ORIGINES`).
 
+### Distribuer l'appli à d'autres personnes (PC)
+
+Chaque release GitHub contient une archive **`recettes-vX.Y.Z.zip`** (Windows, macOS, Linux) : le serveur, la page,
+l'extraction de PDF, un lanceur par système (`lancer-recettes.bat`, `.command`, `.sh`) et un `LISEZMOI.txt`
+qui explique l'installation de Python et le lancement à un non-informaticien. La personne n'a qu'à installer Python,
+décompresser l'archive et double-cliquer sur le lanceur.
+
+L'archive est construite par `python outils/construire_archive.py` (sans dépendance, reproductible) et jointe
+automatiquement à la release par le workflow `release.yml`. Les lanceurs Linux/macOS sont dans `pc/`.
+
 ### Sécurité du serveur local
 
 - L'API n'accepte que la page servie par le serveur lui-même et

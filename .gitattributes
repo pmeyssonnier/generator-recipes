@@ -4,3 +4,7 @@
 
 # Les scripts Termux (shell) doivent garder des fins de ligne LF, même extraits sous Windows
 termux/* text eol=lf
+
+# Lanceurs Linux / macOS : fins de ligne LF
+pc/*.sh text eol=lf
+pc/*.command text eol=lf

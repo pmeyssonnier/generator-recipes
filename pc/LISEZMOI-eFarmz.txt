@@ -1,0 +1,3 @@
+Dépose ici tes fiches recettes eFarmz au format PDF (un fichier = une ou plusieurs recettes),
+puis, dans l'appli : Importer > eFarmz (PDF) > Lire les PDF.
+Nécessite :  pip install pdfplumber

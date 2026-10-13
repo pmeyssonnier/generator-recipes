@@ -24,7 +24,7 @@ jobs:
       - name: Vérification statique (pyflakes)
         run: |
           python -m pip install pyflakes
-          python -m pyflakes serveur_recettes.py pdf_recettes.py tester_sources.py tests colab
+          python -m pyflakes serveur_recettes.py pdf_recettes.py tester_sources.py tests colab outils
       - name: Extraction de PDF (dépendance facultative)
         run: python -m pip install pdfplumber
       - name: Tests hors ligne

@@ -8,6 +8,10 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Ajouté
+- Archive **`recettes-vX.Y.Z.zip`** jointe à chaque release pour distribuer l'appli sur PC (Windows, macOS, Linux) : serveur, page,
+  extraction de PDF, lanceurs (`.bat`, `.command`, `.sh`) et `LISEZMOI.txt`. Script `outils/construire_archive.py`, étape ajoutée à `release.yml`.
+
 ### Corrigé
 - Nombres mixtes en exposant (« 1 1/2 », « 2 1/4 ») : l'espace entre l'entier et la fraction est conservé (« 1 1/2 » et non « 11/2 » à la copie). Les fractions seules (« 1/2 gousse ») restent telles quelles.
 
