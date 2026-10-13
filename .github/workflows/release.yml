@@ -60,3 +60,23 @@ jobs:
         run: |
           python outils/construire_archive.py .
           gh release upload "$GITHUB_REF_NAME" "recettes-$GITHUB_REF_NAME.zip" --clobber
+
+  exe:
+    name: recettes.exe (Windows)
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Construire l'exécutable (PyInstaller)
+        run: |
+          python -m pip install pyinstaller pdfplumber
+          python outils/construire_exe.py .
+      - name: Essai de l'exécutable
+        run: python outils/essai_exe.py (Get-ChildItem recettes-v*.exe).FullName
+      - name: Joindre l'exécutable à la release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$env:GITHUB_REF_NAME" (Get-ChildItem recettes-v*.exe).FullName --clobber
