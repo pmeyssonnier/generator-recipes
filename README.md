@@ -63,6 +63,10 @@ dossier `eFarmz/` sont créés **à côté du `.exe`**. Windows affiche « Windo
 *Informations complémentaires* puis *Exécuter quand même* ; certains antivirus signalent à tort les `.exe` de ce type. Il est construit
 par `outils/construire_exe.py` (PyInstaller) dans GitHub Actions (CI et release), qui l'essaie avant de le joindre (`outils/essai_exe.py`).
 
+**Mise à jour sur PC** : `python serveur_recettes.py --maj` (ou `--maj v1.5.0`, `--maj main`) remplace le serveur, la page et le module PDF par ceux de la
+dernière release (tout ou rien, `recettes.json` jamais touché). Les lanceurs de l'archive l'appellent à chaque lancement ; dans un clone git, ils font
+`git pull`. Le `.exe` ne se met pas à jour seul : il faut télécharger le nouveau.
+
 ### Sécurité du serveur local
 
 - L'API n'accepte que la page servie par le serveur lui-même et

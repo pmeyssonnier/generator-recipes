@@ -4,8 +4,8 @@ rem ============================================================
 rem  Lanceur Windows du generateur de recettes
 rem  Double-clic : au premier lancement, installe Python (si absent,
 rem  apres confirmation) et l'extraction de PDF ; ensuite, lance
-rem  directement le serveur. Met aussi a jour depuis GitHub si le
-rem  dossier est un clone git.
+rem  directement le serveur. Met a jour a chaque lancement : git pull
+rem  si le dossier est un clone git, sinon derniere release GitHub.
 rem  Options transmises au serveur, ex. : lancer-recettes.bat --lan
 rem ============================================================
 cd /d "%~dp0"
@@ -40,6 +40,14 @@ if not defined PY (
     pause
     exit /b 1
   )
+)
+
+rem --- Mise a jour (sans git) : derniere release GitHub, tout ou rien, la base n'est pas touchee ---
+if not exist ".git" (
+  echo Recherche d'une nouvelle version...
+  %PY% serveur_recettes.py --maj
+  if errorlevel 1 echo [!] Mise a jour impossible, lancement de la version actuelle.
+  echo.
 )
 
 rem --- Extraction de PDF (pdfplumber) : installee une seule fois ---

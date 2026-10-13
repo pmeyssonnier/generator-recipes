@@ -905,6 +905,56 @@ def ouvrir_navigateur(url):
         pass
 
 
+# ---------------- Mise à jour depuis GitHub (python serveur_recettes.py --maj [vX.Y.Z|main]) ----------------
+DEPOT = "pmeyssonnier/generator-recipes"
+FICHIERS_MAJ = ("serveur_recettes.py", "generateur-recettes.html")      # obligatoires (tout ou rien)
+FICHIERS_MAJ_FACULTATIFS = ("pdf_recettes.py",)                          # absents des anciennes versions
+
+
+def mettre_a_jour(version=""):
+    """Remplace le serveur et la page par ceux de la dernière release (ou de la version demandée).
+    Tout ou rien : un téléchargement qui échoue ne modifie rien. La base recettes.json n'est jamais touchée.
+    RECETTES_API / RECETTES_RAW remplacent les adresses de GitHub (tests). Renvoie le code de sortie."""
+    if EXECUTABLE:
+        print("Mise à jour impossible depuis recettes.exe : télécharge la nouvelle version sur "
+              f"https://github.com/{DEPOT}/releases")
+        return 1
+    api = os.environ.get("RECETTES_API", f"https://api.github.com/repos/{DEPOT}").rstrip("/")
+    brut = os.environ.get("RECETTES_RAW", f"https://raw.githubusercontent.com/{DEPOT}").rstrip("/")
+    version = version or os.environ.get("RECETTES_VERSION", "")
+
+    def lire(url):
+        with build_opener().open(Request(url, headers={"User-Agent": f"{ROBOTS_NOM}/{VERSION}"}), timeout=30) as r:
+            return r.read()
+
+    try:
+        if not version:
+            version = json.loads(lire(f"{api}/releases/latest")).get("tag_name", "")
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", version or ""):
+            print(f"Version introuvable ou invalide : {version!r}. Rien n'a été modifié.")
+            return 1
+        if version.lstrip("v") == VERSION:
+            print(f"Déjà à jour : version {VERSION}.")
+            return 0
+        print(f"Mise à jour vers {version} (actuellement {VERSION})…")
+        nouveaux = {nom: lire(f"{brut}/{version}/{nom}") for nom in FICHIERS_MAJ}
+    except (HTTPError, URLError, OSError, ValueError) as e:
+        print(f"Mise à jour impossible ({e}). Rien n'a été modifié.")
+        return 1
+    for nom in FICHIERS_MAJ_FACULTATIFS:
+        try:
+            nouveaux[nom] = lire(f"{brut}/{version}/{nom}")
+        except (HTTPError, URLError, OSError):
+            print(f"{nom} absent de la version {version} : ignoré.")
+    for nom, contenu in nouveaux.items():
+        with open(os.path.join(DIR, nom + ".tmp"), "wb") as f:
+            f.write(contenu)
+    for nom in nouveaux:
+        os.replace(os.path.join(DIR, nom + ".tmp"), os.path.join(DIR, nom))
+    print(f"Mise à jour terminée : {version}.")
+    return 0
+
+
 if __name__ == "__main__":
     for flux in (sys.stdout, sys.stderr):                    # console Windows (cp1252) ou redirection : jamais d'erreur d'encodage
         try:
@@ -914,6 +964,9 @@ if __name__ == "__main__":
     if "--version" in sys.argv:
         print(f"serveur_recettes {VERSION}")
         sys.exit(0)
+    if "--maj" in sys.argv:
+        suite = sys.argv[sys.argv.index("--maj") + 1:]
+        sys.exit(mettre_a_jour(suite[0] if suite and not suite[0].startswith("-") else ""))
     page = trouver_page()
     if not page:
         print(f"⚠ Aucune page HTML trouvée dans {DIR}")
