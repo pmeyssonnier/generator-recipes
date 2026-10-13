@@ -8,6 +8,8 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.3.1] - 2026-10-13
+
 ### Modifié
 - Windows : `lancer-recettes.bat` installe Python au premier lancement s'il est absent (via `winget`, après confirmation) puis
   l'extraction de PDF (`pdfplumber`, une seule fois, repère `.dependances-ok`) ; les lancements suivants démarrent directement l'appli.
@@ -128,7 +130,8 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.3.0...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.3.1
 [1.3.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.3.0
 [1.2.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.2.1
 [1.2.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.2.0
