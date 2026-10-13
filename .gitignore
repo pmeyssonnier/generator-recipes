@@ -4,6 +4,7 @@ recettes_marmiton.json
 recettes.json.corrompu-*
 recettes_*.json
 *.tmp
+.dependances-ok
 
 # Python
 __pycache__/

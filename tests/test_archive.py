@@ -1,5 +1,6 @@
 """Tests de l'archive à distribuer (outils/construire_archive.py) : python -m unittest discover -s tests"""
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,17 @@ class Archive(unittest.TestCase):
         bat = self.zip.read("recettes/lancer-recettes.bat")
         self.assertIn(b"\r\n", bat)
         self.assertNotIn(b"\n", bat.replace(b"\r\n", b""))
+
+    def test_lanceur_windows_installe_python_et_dependances(self):
+        bat = self.zip.read("recettes/lancer-recettes.bat").decode("ascii")                  # ASCII : pas de souci de page de code
+        for attendu in ("winget install", "Python.Python.3.12", "pip install", "pdfplumber", ".dependances-ok",
+                        "serveur_recettes.py %*"):
+            self.assertIn(attendu, bat)
+        # chaque « call / goto :étiquette » désigne une étiquette qui existe (le script ne peut pas être exécuté ici)
+        etiquettes = set(re.findall(r"^:(\w+)", bat, re.M)) | {"eof"}
+        for cible in re.findall(r"(?:call|goto) :(\w+)", bat):
+            self.assertIn(cible, etiquettes)
+        self.assertEqual(bat.count("("), bat.count(")"))                                      # parenthèses équilibrées
 
     def test_mode_d_emploi_porte_la_version(self):
         texte = self.zip.read("recettes/LISEZMOI.txt").decode("utf-8")
