@@ -82,4 +82,6 @@ def main(exe):
 
 
 if __name__ == "__main__":
+    for flux in (sys.stdout, sys.stderr):                    # console Windows (cp1252) : jamais d'erreur d'encodage
+        flux.reconfigure(errors="replace")
     main(os.path.abspath(sys.argv[1]))
