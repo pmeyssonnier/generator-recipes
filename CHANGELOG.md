@@ -8,6 +8,15 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Ajouté
+- Filtre **Source** (Marmiton, PtitChef, eFarmz, 750g…) à côté du filtre Catégorie.
+
+### Modifié
+- Filtre **Catégorie** : les variantes sont regroupées (« Entrée » = « Entrées », « Dessert » = « Desserts » = « Desert », « Plat » = « Plats principaux »…),
+  une recette qui a plusieurs catégories apparaît dans chacune.
+- « eFarmz » n'est plus une catégorie (c'est une source) : les recettes eFarmz, déjà importées ou nouvelles, sont classées
+  (entrée, plat principal, dessert, accompagnement, sauce, boisson, apéritif) d'après leur titre et leurs ingrédients, comme les autres.
+
 ## [1.4.0] - 2026-10-13
 
 ### Ajouté

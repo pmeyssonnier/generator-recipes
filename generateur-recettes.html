@@ -151,6 +151,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       <option value="4">4+</option><option value="4.5">4,5+</option>
     </select>
 
+    <label for="src">Source</label>
+    <select id="src"><option value="">Toutes</option></select>
+
     <label for="cat">Catégorie</label>
     <select id="cat"><option value="">Toutes</option></select>
 
@@ -250,11 +253,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // ---------- État ----------
   const PAGE = 48;                           // cartes affichées par « page » (bouton « Afficher plus »)
   let recettes = [];
-  const st = { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", tri:"note", favOnly:false,
+  const st = { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", src:"", tri:"note", favOnly:false,
                surprise:null, visibles:PAGE, panier:new Set(), favs:new Set() };
 
   // ---------- Stockage local ----------
-  const sansIndex = ({ _ing, _txt, _note, _avis, _tps, ...r }) => r;
+  const sansIndex = ({ _ing, _txt, _note, _avis, _tps, _cats, _src, ...r }) => r;
   function save() {
     try {
       localStorage.setItem(KEY, JSON.stringify({
@@ -297,7 +300,56 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const imageSure = u => /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\/=]+$/i.test(String(u ?? "").trim())
     ? String(u).trim() : urlSure(u);
   const fmtMin = m => m == null ? "?" : m >= 60 ? `${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")}` : `${m} min`;
-  const catOf = r => Array.isArray(r.categorie) ? r.categorie.join(", ") : (r.categorie || "");
+  // ---------- Catégories (variantes regroupées), sources, classement des recettes eFarmz ----------
+  const majuscule = s => s.charAt(0).toUpperCase() + s.slice(1);
+  // Clé de regroupement : sans accents ni majuscules, au singulier (« Entrées » = « Entrée »), quelques synonymes
+  const CAT_ALIAS = { desert: "dessert", plat: "plat principal", "plat de resistance": "plat principal", apero: "aperitif" };
+  const CAT_NOMS = { entree: "Entrée", "plat principal": "Plat principal", dessert: "Dessert", accompagnement: "Accompagnement",
+                     boisson: "Boisson", sauce: "Sauce", aperitif: "Apéritif", "amuse gueule": "Amuse-gueule" };
+  const CATLAB = {};                                   // clé → libellé affiché (la variante la plus courte rencontrée)
+  function cleCat(s) {
+    const k = norm(s).replace(/[^a-z0-9]+/g, " ").trim().split(" ")
+      .map(m => m.length > 3 && m.endsWith("aux") ? m.slice(0, -3) + "al" : m.length > 3 && /[^s]s$/.test(m) ? m.slice(0, -1) : m).join(" ");
+    return CAT_ALIAS[k] || k;
+  }
+  function catsOf(r) {
+    const brut = Array.isArray(r.categorie) ? r.categorie : String(r.categorie || "").split(/[,;|]/);
+    const cles = [];
+    for (const b of brut.map(x => String(x).trim()).filter(Boolean)) {
+      const k = cleCat(b);
+      if (!k || k === "efarmz" || cles.includes(k)) continue;        // « eFarmz » est une source, pas une catégorie
+      if (!CAT_NOMS[k] && (!CATLAB[k] || b.length < CATLAB[k].length)) CATLAB[k] = majuscule(b);
+      cles.push(k);
+    }
+    return cles;
+  }
+  const catLabel = k => CAT_NOMS[k] || CATLAB[k] || k;
+  const catOf = r => (r._cats || catsOf(r)).map(catLabel).join(", ");
+
+  const SOURCES_NOMS = { "marmiton.org": "Marmiton", "ptitchef.com": "PtitChef", "750g.com": "750g", "cuisineaz.com": "CuisineAZ",
+    "journaldesfemmes.fr": "Journal des Femmes", "ricardocuisine.com": "Ricardo", "cuisine-libre.org": "Cuisine libre",
+    "jamieoliver.com": "Jamie Oliver", "bbcgoodfood.com": "BBC Good Food", "allrecipes.com": "Allrecipes", "chefkoch.de": "Chefkoch" };
+  function sourceNom(r) {
+    const s = String(r.source || "").trim();
+    if (/^efarmz/i.test(s)) return "eFarmz";                          // « eFarmz · fichier.pdf p.3 »
+    return SOURCES_NOMS[s.toLowerCase().replace(/^www\./, "")] || s || "Autre";
+  }
+
+  // Catégorie probable d'une recette sans catégorie (fiches eFarmz), d'après son titre et ses ingrédients
+  function devinerCategorie(r) {
+    const nom = norm(r.nom), ing = norm((r.ingredients || []).join(" | "));
+    const a = re => re.test(nom);
+    const viande = /lardon|jambon|poulet|boeuf|porc|saumon|thon|viande|fromage rape|oignon|steak|poisson|crevette/.test(ing);
+    if (a(/\b(smoothie|milk-?shake|limonade|cocktail|boisson|infusion|chocolat chaud|punch)\b/) || /^jus\b/.test(nom)) return "Boisson";
+    if (a(/\b(sauce|vinaigrette|mayonnaise|coulis|pesto|guacamole|chutney|aioli|bechamel|tapenade|ketchup|marinade)\b/)) return "Sauce";
+    if (a(/\b(dessert|gateau|mousse|brownie|cookies?|crumble|tiramisu|glace|sorbet|clafoutis|cheesecake|panna cotta|fondant|moelleux|profiteroles?|eclairs?|macarons?|madeleines?|compote|riz au lait|charlotte|pudding|ile flottante|financiers?|truffes?|flan|creme (brulee|anglaise|patissiere|caramel|dessert)|tarte (tatin|au citron|aux (pommes|fraises|poires|framboises|myrtilles|abricots|cerises))|salade de fruits)\b/)) return "Dessert";
+    if (a(/\b(crepes?|gaufres?|pancakes?|beignets?|muffins?|cake|tarte|galette|pain perdu)\b/) && !viande && /sucre|chocolat|vanille|miel|confiture/.test(ing)) return "Dessert";
+    if (a(/\b(puree|gratin dauphinois|frites|ratatouille|polenta|semoule|riz (pilaf|basmati)|legumes? (roti|rotis|saute|sautes|grilles|vapeur)|poelee)\b/)) return "Accompagnement";
+    if (a(/\b(apero|aperitif|tzatziki|rillettes|dips?|cake sale|toasts?|feuilletes?|mini)\b/)) return "Apéritif";
+    if (a(/\b(soupe|potage|veloute|gaspacho|carpaccio|tartare|houmous|verrines?|terrines?|bruschetta|accras|nems)\b/)) return "Entrée";
+    if (a(/\bsalade\b/) && !a(/poulet|thon|saumon|lardons|riz|pates|quinoa|lentilles|boeuf|crevettes|nicoise|cesar|chevre chaud/)) return "Entrée";
+    return "Plat principal";
+  }
   const nettoyerNom = s => String(s || "").replace(/ /g, " ")
     .replace(/\s*:\s*la meilleure recette\s*$/i, "").trim();
   // Clé des favoris / panier : l'URL, ou le nom pour une recette sans URL
@@ -310,6 +362,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     r.image = imageSure(r.image);
     if (!r.source && r.url) { try { r.source = new URL(r.url).hostname.replace(/^www\./, ""); } catch {} }
     r._ing = norm((r.ingredients || []).join(" | "));
+    if (!catsOf(r).length && /^efarmz/i.test(String(r.source || ""))) r.categorie = devinerCategorie(r);   // fiche eFarmz : classée comme les autres
+    r._cats = catsOf(r);
+    r._src = sourceNom(r);
     r._txt = norm([r.nom, catOf(r), r.cuisine, r.mots_cles, r.source].flat().join(" "));
     r._note = num(r.note);
     r._avis = num(r.nb_avis) || 0;
@@ -408,7 +463,8 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       if (st.sans.some(x => r._ing.includes(norm(x)))) return false;
       if (st.tmax && (r._tps == null || r._tps > st.tmax)) return false;
       if (st.nmin && (r._note ?? 0) < st.nmin) return false;
-      if (st.cat && catOf(r) !== st.cat) return false;
+      if (st.cat && !r._cats.includes(st.cat)) return false;
+      if (st.src && r._src !== st.src) return false;
       if (st.favOnly && !st.favs.has(cle(r))) return false;
       return true;
     });
@@ -481,9 +537,12 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
 
   function remplirCategories() {
-    const cats = [...new Set(recettes.map(catOf).filter(Boolean))].sort((a,b) => a.localeCompare(b, "fr"));
+    const cles = [...new Set(recettes.flatMap(r => r._cats || catsOf(r)))].sort((a, b) => catLabel(a).localeCompare(catLabel(b), "fr"));
     $("cat").innerHTML = `<option value="">Toutes</option>` +
-      cats.map(c => `<option${c === st.cat ? " selected" : ""}>${esc(c)}</option>`).join("");
+      cles.map(k => `<option value="${esc(k)}"${k === st.cat ? " selected" : ""}>${esc(catLabel(k))}</option>`).join("");
+    const sources = [...new Set(recettes.map(r => r._src || sourceNom(r)))].sort((a, b) => a.localeCompare(b, "fr"));
+    $("src").innerHTML = `<option value="">Toutes</option>` +
+      sources.map(x => `<option${x === st.src ? " selected" : ""}>${esc(x)}</option>`).join("");
   }
 
   // ---------- Détail ----------
@@ -708,6 +767,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   });
   $("nmin").addEventListener("change", e => { st.nmin = +e.target.value; filtreChange(); });
   $("cat").addEventListener("change", e => { st.cat = e.target.value; filtreChange(); });
+  $("src").addEventListener("change", e => { st.src = e.target.value; filtreChange(); });
   $("tri").addEventListener("change", e => { st.tri = e.target.value; filtreChange(); });
   $("favOnly").addEventListener("change", e => { st.favOnly = e.target.checked; filtreChange(); });
 
@@ -736,9 +796,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   $("btnSurprise").addEventListener("click", surprise);
 
   $("btnReset").addEventListener("click", () => {
-    Object.assign(st, { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", tri:"note", favOnly:false, surprise:null, visibles:PAGE });
+    Object.assign(st, { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", src:"", tri:"note", favOnly:false, surprise:null, visibles:PAGE });
     $("q").value = ""; $("tmax").value = 0; $("tmaxVal").textContent = "illimité";
-    $("nmin").value = "0"; $("cat").value = ""; $("tri").value = "note"; $("favOnly").checked = false;
+    $("nmin").value = "0"; $("cat").value = ""; $("src").value = ""; $("tri").value = "note"; $("favOnly").checked = false;
     renderChips(); render();
   });
 
