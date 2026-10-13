@@ -8,6 +8,8 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.3.0] - 2026-10-13
+
 ### Ajouté
 - Archive **`recettes-vX.Y.Z.zip`** jointe à chaque release pour distribuer l'appli sur PC (Windows, macOS, Linux) : serveur, page,
   extraction de PDF, lanceurs (`.bat`, `.command`, `.sh`) et `LISEZMOI.txt`. Script `outils/construire_archive.py`, étape ajoutée à `release.yml`.
@@ -121,7 +123,8 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.2.1...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.3.0
 [1.2.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.2.1
 [1.2.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.2.0
 [1.1.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.1.1
