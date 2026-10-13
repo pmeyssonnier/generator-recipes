@@ -1,0 +1,36 @@
+GÉNÉRATEUR DE RECETTES — version {VERSION}
+=========================================
+
+Carnet de recettes personnel : importe des recettes (Marmiton, 750g, Cuisine AZ, Ricardo…
+et des PDF de fiches eFarmz), filtre selon ce que tu as dans le frigo, tire une recette au sort
+et prépare ta liste de courses. Tout reste sur ton ordinateur.
+
+1) Installer Python (une seule fois)
+   https://www.python.org/downloads/  (version 3.9 ou plus récente)
+   Windows : coche « Add python.exe to PATH » pendant l'installation.
+
+2) Décompresser ce dossier où tu veux (par exemple dans Documents), puis le lancer
+   - Windows : double-clic sur  lancer-recettes.bat
+   - macOS   : double-clic sur  lancer-recettes.command
+               (si macOS refuse : clic droit > Ouvrir, ou dans le Terminal : chmod +x *.command *.sh)
+   - Linux   : ./lancer-recettes.sh
+
+   Le navigateur s'ouvre sur http://localhost:8765 . Pour arrêter : ferme la fenêtre noire (ou Ctrl+C).
+
+3) Utiliser
+   - « Importer » : cherche sur un site ou colle l'adresse d'une recette.
+   - Tes recettes sont enregistrées dans recettes.json, à côté de ces fichiers.
+     Garde ce fichier pour sauvegarder ou déplacer ta base.
+
+PDF eFarmz (facultatif)
+   Installe l'extraction de PDF :   pip install pdfplumber
+   Dépose tes fiches PDF dans le dossier  eFarmz/  puis, dans « Importer », choisis « eFarmz (PDF) ».
+
+Mettre à jour
+   Télécharge la dernière archive sur
+   https://github.com/pmeyssonnier/generator-recipes/releases
+   et remplace serveur_recettes.py, pdf_recettes.py et generateur-recettes.html.
+   Ton fichier recettes.json n'est pas touché.
+
+Respect des sites : usage personnel, avec pauses entre les requêtes (voir le README du projet).
+Licence et code source : https://github.com/pmeyssonnier/generator-recipes
