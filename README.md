@@ -57,6 +57,12 @@ décompresser l'archive et double-cliquer sur le lanceur.
 L'archive est construite par `python outils/construire_archive.py` (sans dépendance, reproductible) et jointe
 automatiquement à la release par le workflow `release.yml`. Les lanceurs Linux/macOS sont dans `pc/`.
 
+**Version `.exe` (Windows, sans Python)** : chaque release contient aussi `recettes-vX.Y.Z.exe`, un seul fichier qui embarque
+Python, `pdfplumber` et la page. Un double-clic ouvre une fenêtre noire (le serveur) puis le navigateur ; `recettes.json` et le
+dossier `eFarmz/` sont créés **à côté du `.exe`**. Windows affiche « Windows a protégé votre ordinateur » (programme non signé) :
+*Informations complémentaires* puis *Exécuter quand même* ; certains antivirus signalent à tort les `.exe` de ce type. Il est construit
+par `outils/construire_exe.py` (PyInstaller) dans GitHub Actions (CI et release), qui l'essaie avant de le joindre (`outils/essai_exe.py`).
+
 ### Sécurité du serveur local
 
 - L'API n'accepte que la page servie par le serveur lui-même et

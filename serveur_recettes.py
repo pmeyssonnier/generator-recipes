@@ -22,7 +22,9 @@ from urllib.robotparser import RobotFileParser
 PORT = int(os.environ.get("RECETTES_PORT", 8765))
 LAN = "--lan" in sys.argv          # écoute sur le réseau local (accès depuis un autre appareil)
 HOST = "0.0.0.0" if LAN else "127.0.0.1"
-DIR = os.path.dirname(os.path.abspath(__file__))
+EXECUTABLE = bool(getattr(sys, "frozen", False))                 # lancé depuis recettes.exe (PyInstaller)
+DIR = os.path.dirname(sys.executable) if EXECUTABLE else os.path.dirname(os.path.abspath(__file__))   # base et PDF : à côté
+DIR_PAGE = getattr(sys, "_MEIPASS", DIR) if EXECUTABLE else DIR  # page HTML : embarquée dans l'exécutable
 NOMS_PAGE = ("generateur-recettes.html", "generateur_recettes.html")
 BASE_FILE = os.path.join(DIR, "recettes.json")
 DOSSIER_PDF = os.path.join(DIR, "eFarmz")                        # PDF de recettes déposés ici (source « eFarmz »)
@@ -78,9 +80,9 @@ MAX_CACHE = 200          # pages gardées en mémoire
 def trouver_page():
     """Accepte generateur-recettes.html, generateur_recettes.html, sinon le premier .html du dossier."""
     for nom in NOMS_PAGE:
-        if os.path.exists(os.path.join(DIR, nom)):
+        if os.path.exists(os.path.join(DIR_PAGE, nom)):
             return nom
-    autres = sorted(f for f in os.listdir(DIR) if f.lower().endswith((".html", ".htm")))
+    autres = sorted(f for f in os.listdir(DIR_PAGE) if f.lower().endswith((".html", ".htm")))
     return autres[0] if autres else None
 
 
@@ -765,7 +767,7 @@ class Handler(BaseHTTPRequestHandler):
                     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                     "<h2>Page du générateur introuvable</h2>" + details +
                     "<p>Place <b>generateur-recettes.html</b> dans le dossier du serveur puis recharge.</p>", 404)
-            with open(os.path.join(DIR, page), "rb") as f:
+            with open(os.path.join(DIR_PAGE, page), "rb") as f:
                 body = f.read()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -904,6 +906,11 @@ def ouvrir_navigateur(url):
 
 
 if __name__ == "__main__":
+    for flux in (sys.stdout, sys.stderr):                    # console Windows (cp1252) ou redirection : jamais d'erreur d'encodage
+        try:
+            flux.reconfigure(errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
     if "--version" in sys.argv:
         print(f"serveur_recettes {VERSION}")
         sys.exit(0)

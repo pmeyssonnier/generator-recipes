@@ -8,6 +8,14 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Ajouté
+- **`recettes-vX.Y.Z.exe`** (Windows) joint à chaque release : un seul fichier, sans Python à installer (PyInstaller ; Python, `pdfplumber`
+  et la page embarqués). La base `recettes.json` et le dossier `eFarmz/` sont créés à côté du `.exe`. Construit et essayé en CI sous Windows
+  (`outils/construire_exe.py`, `outils/essai_exe.py`).
+
+### Corrigé
+- Le serveur ne plante plus à l'affichage d'un caractère que la console ne sait pas écrire (console Windows, sortie redirigée).
+
 ## [1.3.1] - 2026-10-13
 
 ### Modifié
