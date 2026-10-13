@@ -482,7 +482,7 @@ def recette_pdf(nom, numero, recette):
     r = {k: v for k, v in recette.items() if k != "image_page"}
     r["url"] = ""
     r["source"] = f"eFarmz · {nom} p.{numero}"
-    r["categorie"] = r.get("categorie") or "eFarmz"
+    r["categorie"] = r.get("categorie") or ""            # « eFarmz » est une source : la page classe la recette (entrée, plat, dessert…)
     return r
 
 

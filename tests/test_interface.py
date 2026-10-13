@@ -599,6 +599,38 @@ class Interface(unittest.TestCase):
         self.assertEqual(self.page.locator("#impRes input:checked").count(), 1)       # seule la nouvelle est cochée
         self.assertIn("déjà en base", self.page.inner_text("#impRes"))
 
+    def test_categories_regroupees_efarmz_classe_et_filtre_source(self):
+        """Variantes de catégories regroupées, « eFarmz » absent des catégories (recettes classées), filtre par source."""
+        self.ouvrir()
+        ef = lambda i, nom, ing: recette(i, nom, url="", source=f"eFarmz · v375.pdf p.{i}", categorie="eFarmz",   # noqa: E731
+                                         ingredients=ing)
+        self.charger([recette(1, categorie="Entrée"), recette(2, categorie="Entrées"),
+                      recette(3, categorie="Dessert", source="ptitchef.com"), recette(4, categorie="Desserts"),
+                      recette(5, categorie="Desert"), recette(6, categorie="Plats principaux"),
+                      recette(7, categorie=["Plat principal", "plat"]),
+                      ef(8, "Mousse au chocolat", ["chocolat", "oeufs"]), ef(9, "Soupe de potiron", ["potiron"]),
+                      ef(10, "Poulet rôti", ["poulet"])])
+        options = lambda sel: self.page.locator(f"{sel} option").all_text_contents()    # noqa: E731
+        self.assertEqual(options("#cat"), ["Toutes", "Dessert", "Entrée", "Plat principal"])
+        ordre = lambda: sorted(self.page.locator(".card h3").all_text_contents())     # noqa: E731
+        self.page.select_option("#cat", label="Dessert")
+        self.assertEqual(ordre(), ["Mousse au chocolat", "Recette 3", "Recette 4", "Recette 5"])
+        self.page.select_option("#cat", label="Entrée")
+        self.assertEqual(ordre(), ["Recette 1", "Recette 2", "Soupe de potiron"])
+        self.page.select_option("#cat", label="Plat principal")
+        self.assertEqual(ordre(), ["Poulet rôti", "Recette 6", "Recette 7"])
+        self.assertEqual(options("#src"), ["Toutes", "eFarmz", "Marmiton", "PtitChef"])
+        self.page.select_option("#cat", "")
+        self.page.select_option("#src", "eFarmz")
+        self.assertEqual(ordre(), ["Mousse au chocolat", "Poulet rôti", "Soupe de potiron"])
+        self.page.select_option("#src", "PtitChef")
+        self.assertEqual(ordre(), ["Recette 3"])
+        self.page.click("#btnReset")
+        self.assertEqual(self.page.input_value("#src"), "")
+        self.assertEqual(len(ordre()), 10)
+        base = self.page.evaluate(f"JSON.parse(localStorage.getItem('{KEY}')).recettes")      # classement enregistré
+        self.assertEqual([r["categorie"] for r in base if r["nom"] == "Soupe de potiron"], ["Entrée"])
+
     def test_filtres_tri_et_reinitialisation(self):
         self.ouvrir()
         self.charger([recette(1, note=4.9, total_min=30, categorie="Plat"),
