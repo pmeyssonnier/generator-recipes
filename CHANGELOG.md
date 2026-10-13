@@ -8,6 +8,8 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.5.0] - 2026-10-13
+
 ### Ajouté
 - Filtre **Source** (Marmiton, PtitChef, eFarmz, 750g…) à côté du filtre Catégorie.
 
@@ -149,7 +151,8 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.4.0...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.5.0
 [1.4.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.4.0
 [1.3.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.3.1
 [1.3.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.3.0
