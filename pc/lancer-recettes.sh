@@ -9,6 +9,13 @@ else
   read -r -p "Entrée pour fermer" || true
   exit 1
 fi
+if [ -d .git ]; then                                  # dossier cloné : git pull ; sinon, dernière release GitHub
+  command -v git >/dev/null 2>&1 && { git pull --ff-only || echo "[!] Mise à jour impossible, lancement de la version locale."; }
+else
+  echo "Recherche d'une nouvelle version…"
+  "$PY" serveur_recettes.py --maj || echo "[!] Mise à jour impossible, lancement de la version actuelle."
+fi
+echo
 "$PY" serveur_recettes.py "$@"
 echo
 read -r -p "Serveur arrêté. Entrée pour fermer" || true

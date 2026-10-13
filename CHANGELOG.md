@@ -8,6 +8,11 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Ajouté
+- `python serveur_recettes.py --maj [vX.Y.Z|main]` : met à jour le serveur, la page et le module PDF depuis la dernière release GitHub
+  (tout ou rien, `recettes.json` jamais touché). Les lanceurs `lancer-recettes.bat` (Windows) et `lancer-recettes.sh` / `.command` l'appellent
+  à chaque lancement quand le dossier n'est pas un clone git (archive `.zip`) ; avec git, ils font `git pull` comme avant.
+
 ## [1.5.0] - 2026-10-13
 
 ### Ajouté

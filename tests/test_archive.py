@@ -47,7 +47,7 @@ class Archive(unittest.TestCase):
     def test_lanceur_windows_installe_python_et_dependances(self):
         bat = self.zip.read("recettes/lancer-recettes.bat").decode("ascii")                  # ASCII : pas de souci de page de code
         for attendu in ("winget install", "Python.Python.3.12", "pip install", "pdfplumber", ".dependances-ok",
-                        "serveur_recettes.py %*"):
+                        "serveur_recettes.py %*", "serveur_recettes.py --maj"):
             self.assertIn(attendu, bat)
         # chaque « call / goto :étiquette » désigne une étiquette qui existe (le script ne peut pas être exécuté ici)
         etiquettes = set(re.findall(r"^:(\w+)", bat, re.M)) | {"eof"}

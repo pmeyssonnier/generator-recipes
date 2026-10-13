@@ -30,10 +30,11 @@ PDF eFarmz (facultatif)
    Dépose tes fiches PDF dans le dossier  eFarmz/  puis, dans « Importer », choisis « eFarmz (PDF) ».
 
 Mettre à jour
-   Télécharge la dernière archive sur
+   Avec lancer-recettes.bat / .sh / .command : rien à faire, la dernière version est téléchargée au lancement
+   (serveur, page et module PDF ; ton fichier recettes.json n'est pas touché). Pour la forcer à la main :
+   python serveur_recettes.py --maj
+   Avec recettes.exe : télécharge le nouveau .exe sur
    https://github.com/pmeyssonnier/generator-recipes/releases
-   et remplace serveur_recettes.py, pdf_recettes.py et generateur-recettes.html.
-   Ton fichier recettes.json n'est pas touché.
 
 Respect des sites : usage personnel, avec pauses entre les requêtes (voir le README du projet).
 Licence et code source : https://github.com/pmeyssonnier/generator-recipes
