@@ -2,7 +2,10 @@
 setlocal
 rem ============================================================
 rem  Lanceur Windows du generateur de recettes
-rem  Double-clic : met a jour depuis GitHub puis lance le serveur
+rem  Double-clic : au premier lancement, installe Python (si absent,
+rem  apres confirmation) et l'extraction de PDF ; ensuite, lance
+rem  directement le serveur. Met aussi a jour depuis GitHub si le
+rem  dossier est un clone git.
 rem  Options transmises au serveur, ex. : lancer-recettes.bat --lan
 rem ============================================================
 cd /d "%~dp0"
@@ -18,19 +21,37 @@ if exist ".git" (
   )
 )
 
-rem --- Recherche de Python (python, sinon lanceur py) ---
-set "PY="
-python --version >nul 2>&1 && set "PY=python"
+rem --- Python : cherche, sinon propose de l'installer (winget) ---
+call :trouver_python
 if not defined PY (
-  py -3 --version >nul 2>&1 && set "PY=py -3"
-)
-if not defined PY (
-  echo [X] Python introuvable.
-  echo     Installe-le depuis https://www.python.org/downloads/
-  echo     en cochant "Add python.exe to PATH", puis relance ce fichier.
+  echo Python n'est pas installe sur cet ordinateur.
+  winget --version >nul 2>&1
+  if errorlevel 1 goto :python_manuel
   echo.
-  pause
-  exit /b 1
+  choice /m "Installer Python maintenant avec winget"
+  if errorlevel 2 goto :python_manuel
+  winget install -e --id Python.Python.3.12 --scope user --accept-package-agreements --accept-source-agreements
+  call :trouver_python
+  if not defined PY (
+    echo.
+    echo [!] Python est installe, mais cette fenetre ne le voit pas encore.
+    echo     Ferme-la et relance lancer-recettes.bat.
+    echo.
+    pause
+    exit /b 1
+  )
+)
+
+rem --- Extraction de PDF (pdfplumber) : installee une seule fois ---
+if not exist ".dependances-ok" (
+  echo Installation de l'extraction de PDF, une seule fois...
+  %PY% -m pip install --user --disable-pip-version-check pdfplumber
+  if errorlevel 1 (
+    echo [!] Installation impossible : l'import de PDF ne sera pas disponible. Nouvel essai au prochain lancement.
+  ) else (
+    echo ok> ".dependances-ok"
+  )
+  echo.
 )
 
 rem --- Lancement du serveur (Ctrl+C pour arreter) ---
@@ -39,3 +60,21 @@ rem --- Lancement du serveur (Ctrl+C pour arreter) ---
 echo.
 echo Serveur arrete.
 pause
+exit /b 0
+
+:python_manuel
+echo.
+echo Installe Python depuis https://www.python.org/downloads/
+echo en cochant "Add python.exe to PATH", puis relance ce fichier.
+echo.
+pause
+exit /b 1
+
+:trouver_python
+set "PY="
+python --version >nul 2>&1 && set "PY=python"
+if defined PY goto :eof
+py -3 --version >nul 2>&1 && set "PY=py -3"
+if defined PY goto :eof
+for /d %%D in ("%LOCALAPPDATA%\Programs\Python\Python3*") do if exist "%%~D\python.exe" set PY="%%~D\python.exe"
+goto :eof

@@ -5,17 +5,20 @@ Carnet de recettes personnel : importe des recettes (Marmiton, 750g, Cuisine AZ,
 et des PDF de fiches eFarmz), filtre selon ce que tu as dans le frigo, tire une recette au sort
 et prépare ta liste de courses. Tout reste sur ton ordinateur.
 
-1) Installer Python (une seule fois)
-   https://www.python.org/downloads/  (version 3.9 ou plus récente)
-   Windows : coche « Add python.exe to PATH » pendant l'installation.
-
-2) Décompresser ce dossier où tu veux (par exemple dans Documents), puis le lancer
+1) Décompresser ce dossier où tu veux (par exemple dans Documents), puis le lancer
    - Windows : double-clic sur  lancer-recettes.bat
-   - macOS   : double-clic sur  lancer-recettes.command
+               Au premier lancement, si Python n'est pas installé, le lanceur propose de l'installer
+               (réponds O ou Y), puis installe l'extraction de PDF. Les fois suivantes, il démarre
+               directement l'appli. Si l'installation automatique échoue :
+               https://www.python.org/downloads/  (3.9 ou plus récent, coche « Add python.exe to PATH »).
+   - macOS   : installe d'abord Python 3 (https://www.python.org/downloads/), puis double-clic sur
+               lancer-recettes.command
                (si macOS refuse : clic droit > Ouvrir, ou dans le Terminal : chmod +x *.command *.sh)
-   - Linux   : ./lancer-recettes.sh
+   - Linux   : Python 3 est en général déjà installé. Lance : ./lancer-recettes.sh
 
    Le navigateur s'ouvre sur http://localhost:8765 . Pour arrêter : ferme la fenêtre noire (ou Ctrl+C).
+
+2) Windows : si la fenêtre indique que Python est installé mais introuvable, ferme-la et relance le lanceur.
 
 3) Utiliser
    - « Importer » : cherche sur un site ou colle l'adresse d'une recette.
@@ -23,7 +26,7 @@ et prépare ta liste de courses. Tout reste sur ton ordinateur.
      Garde ce fichier pour sauvegarder ou déplacer ta base.
 
 PDF eFarmz (facultatif)
-   Installe l'extraction de PDF :   pip install pdfplumber
+   Sous Windows, l'extraction de PDF est installée par le lanceur. Ailleurs :   pip install pdfplumber
    Dépose tes fiches PDF dans le dossier  eFarmz/  puis, dans « Importer », choisis « eFarmz (PDF) ».
 
 Mettre à jour

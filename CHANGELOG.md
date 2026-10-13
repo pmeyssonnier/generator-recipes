@@ -8,6 +8,11 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Modifié
+- Windows : `lancer-recettes.bat` installe Python au premier lancement s'il est absent (via `winget`, après confirmation) puis
+  l'extraction de PDF (`pdfplumber`, une seule fois, repère `.dependances-ok`) ; les lancements suivants démarrent directement l'appli.
+  Sans `winget`, il affiche comme avant le lien de téléchargement de Python. Mode d'emploi de l'archive mis à jour.
+
 ## [1.3.0] - 2026-10-13
 
 ### Ajouté

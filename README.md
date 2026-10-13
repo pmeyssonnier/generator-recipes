@@ -31,7 +31,8 @@ python serveur_recettes.py
 
 Le navigateur s'ouvre sur <http://localhost:8765>.
 
-Sous Windows, un double-clic sur **`lancer-recettes.bat`** fait la même chose : il met
+Sous Windows, un double-clic sur **`lancer-recettes.bat`** fait la même chose : au premier lancement il installe Python (si absent, après
+confirmation, via `winget`) et `pdfplumber`, puis il met
 d'abord le code à jour depuis GitHub (`git pull`, si le dossier est un clone), puis lance
 le serveur. Les options se transmettent : `lancer-recettes.bat --lan`.
 
