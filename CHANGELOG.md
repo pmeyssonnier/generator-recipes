@@ -8,6 +8,8 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.5.1] - 2026-10-13
+
 ### Ajouté
 - `python serveur_recettes.py --maj [vX.Y.Z|main]` : met à jour le serveur, la page et le module PDF depuis la dernière release GitHub
   (tout ou rien, `recettes.json` jamais touché). Les lanceurs `lancer-recettes.bat` (Windows) et `lancer-recettes.sh` / `.command` l'appellent
@@ -156,7 +158,8 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.5.0...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.5.1
 [1.5.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.5.0
 [1.4.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.4.0
 [1.3.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.3.1
