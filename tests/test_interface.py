@@ -517,7 +517,7 @@ class Interface(unittest.TestCase):
         self.assertEqual(cartes(), 48)
         self.assertEqual(self.page.inner_text(".plus .meta"), "48 sur 130 affichées")
         self.assertEqual(self.page.inner_text("#plus"), "Afficher 48 de plus (82 restantes)")
-        self.assertEqual(self.page.inner_text("#count"), "130 / 130 recettes")
+        self.assertEqual(self.page.inner_text("#count"), "130 recettes")
         self.page.focus("#plus")
         self.page.keyboard.press("Enter")
         self.assertEqual(cartes(), 96)
@@ -788,9 +788,13 @@ class Interface(unittest.TestCase):
         self.assertFalse(self.page.is_visible("#cat"), "le tiroir est fermé au départ")
         self.assertEqual(self.page.get_attribute("#btnFiltres", "aria-expanded"), "false")
         self.page.click("#btnFiltres")
+        self.page.wait_for_selector("#avecIn", state="visible")          # seul « Ingrédients » est ouvert au départ
+        self.assertEqual(self.page.locator("details.fgrp[open]").count(), 1)
+        self.assertFalse(self.page.is_visible("#cat"))
+        self.assertEqual(self.page.evaluate("document.activeElement.id"), "btnFermerFiltres")
+        self.page.click("details.fgrp:has(#cat) > summary")
         self.page.wait_for_selector("#cat", state="visible")
         self.assertEqual(self.page.get_attribute("#btnFiltres", "aria-expanded"), "true")
-        self.assertEqual(self.page.evaluate("document.activeElement.id"), "btnFermerFiltres")
         self.page.select_option("#cat", "Dessert")
         self.assertEqual(self.noms_affiches(), ["Recette 2"])            # le filtre agit pendant que le tiroir est ouvert
         self.page.wait_for_function("() => document.getElementById('nbFiltres').textContent === '1'", polling=100)
@@ -810,6 +814,50 @@ class Interface(unittest.TestCase):
         self.page.wait_for_selector("#cat", state="hidden")
         self.page.set_viewport_size({"width": 1200, "height": 800})     # retour grand écran : colonne visible
         self.assertTrue(self.page.is_visible("#cat"))
+
+    def test_tiroir_ouvre_les_groupes_ayant_un_filtre_actif(self):
+        self.page.set_viewport_size({"width": 400, "height": 800})
+        self.ouvrir()
+        self.charger([recette(1, categorie="Plat", note=4.8), recette(2, categorie="Dessert", note=3.2)])
+        self.page.click("#btnFiltres")
+        self.page.click("details.fgrp:has(#nmin) > summary")             # « Temps et note » (note ≥ 4)
+        self.page.select_option("#nmin", "4")
+        self.page.click("#btnVoirRecettes")
+        self.page.evaluate("document.querySelector('details.fgrp:has(#nmin)').open = false")   # refermé à la main
+        self.page.click("#btnFiltres")
+        self.assertTrue(self.page.is_visible("#nmin"), "le groupe qui contient un filtre actif se rouvre")
+        self.assertFalse(self.page.is_visible("#cat"), "les groupes sans filtre actif restent repliés")
+
+    def test_compteur_de_recettes(self):
+        self.ouvrir()
+        self.assertEqual(self.page.inner_text("#count"), "Aucune recette")
+        self.charger([recette(1, note=4.8), recette(2, note=3.2), recette(3, note=4.1)])
+        self.assertEqual(self.page.inner_text("#count"), "3 recettes")
+        self.page.select_option("#nmin", "4")
+        self.assertEqual(self.page.inner_text("#count"), "2 sur 3 recettes")
+        self.page.select_option("#nmin", "4.5")
+        self.assertEqual(self.page.inner_text("#count"), "1 sur 3 recettes")
+
+    def test_identite_des_recettes_identique_en_python_et_en_javascript(self):
+        """Les règles d'identité existent dans le serveur (cle_recette) et dans la page (cle) : mêmes cas, mêmes regroupements."""
+        pdf = "eFarmz · v375.pdf p.4"
+        cas = [
+            {"nom": "Tarte", "url": "https://x.test/a"}, {"nom": "Tarte v2", "url": "https://x.test/a"},   # même URL
+            {"nom": "Poulet", "source": pdf}, {"nom": "Poulet corrigé", "source": pdf},                    # même page de PDF
+            {"nom": "Poulet corrigé", "source": "eFarmz · v375.pdf p.5"},                                   # autre page, même nom
+            {"nom": "Gratin : la meilleure recette", "source": "marmiton.org"}, {"nom": "Gratin"},           # suffixe SEO
+            {"nom": "Z", "source": "x.PDF P.4"}, {"nom": "ZZ", "source": "x.PDF P.4"},                      # casse
+            {"nom": "A", "source": "x.pdf p.4 bis"}, {"nom": "A"},                                          # pas une page de PDF
+            {"nom": "B", "url": ""}, {"nom": "B", "url": "https://x.test/b"},                               # URL vide / présente
+        ]
+        survivants = {}
+        for r in cas:                                                   # ce que fait le serveur : nom nettoyé, dernier arrivé gagne
+            r2 = dict(r, nom=s.nettoyer_nom(r["nom"]))
+            survivants[s.cle_recette(r2)] = r2["nom"]
+        self.ouvrir()
+        self.charger([dict(r, ingredients=["x"]) for r in cas])
+        self.page.wait_for_function(f"() => document.querySelectorAll('.card').length === {len(survivants)}", polling=100)
+        self.assertEqual(self.noms_affiches(), sorted(survivants.values()))
 
     def test_filtres_tri_et_reinitialisation(self):
         self.ouvrir()
@@ -854,7 +902,7 @@ class Interface(unittest.TestCase):
         self.page.click("#btnClear")
         self.assertEqual(self.page.locator(".card").count(), 0)
         self.assertIn("Aucune recette chargée", self.page.inner_text("#grid"))
-        self.assertEqual(self.page.inner_text("#count"), "0 / 0 recette")
+        self.assertEqual(self.page.inner_text("#count"), "Aucune recette")
 
     def test_fermeture_des_fenetres(self):
         self.ouvrir()

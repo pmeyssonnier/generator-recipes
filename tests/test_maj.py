@@ -1,6 +1,8 @@
 """Tests de la mise à jour par release (python serveur_recettes.py --maj) : python -m unittest discover -s tests
 
 Un faux GitHub local sert l'API des releases et les fichiers bruts ; la copie du serveur est essayée dans un dossier temporaire."""
+import contextlib
+import io
 import json
 import os
 import re
@@ -207,6 +209,28 @@ class RetourArriere(unittest.TestCase):
         for nom in ("serveur_recettes.py", "generateur-recettes.html", "pdf_recettes.py"):
             self.assertEqual(self.lire(nom), f"ancien {nom}", nom)
         self.assertEqual(sorted(os.listdir(self.dossier)), ["generateur-recettes.html", "pdf_recettes.py", "serveur_recettes.py"])
+
+    def test_restauration_impossible_signalee_et_sauvegarde_gardee(self):
+        """Si le retour en arrière échoue lui aussi, on ne prétend pas avoir tout restauré et la copie d'origine reste."""
+        vrai = os.replace
+
+        def en_panne(source, cible):
+            if cible.endswith("generateur-recettes.html") and source.endswith(".tmp"):
+                raise PermissionError("fichier verrouillé")          # le 2e remplacement échoue
+            if source.endswith("serveur_recettes.py.bak"):
+                raise PermissionError("verrouillé aussi pendant la restauration")
+            return vrai(source, cible)
+
+        sortie = io.StringIO()
+        with mock.patch.object(self.s.os, "replace", side_effect=en_panne), contextlib.redirect_stdout(sortie):
+            self.assertEqual(self.s.mettre_a_jour(), 1)
+        texte = sortie.getvalue()
+        self.assertIn("restauration incomplète", texte)
+        self.assertIn("serveur_recettes.py n'a pas pu être restauré", texte)
+        self.assertNotIn("ont été restaurés", texte)
+        self.assertEqual(self.lire("serveur_recettes.py.bak"), "ancien serveur_recettes.py")     # seule copie gardée
+        self.assertFalse(os.path.exists(os.path.join(self.dossier, "generateur-recettes.html.bak")))
+        self.assertFalse(any(n.endswith(".tmp") for n in os.listdir(self.dossier)))
 
     def test_fichier_facultatif_nouveau_supprime_au_retour_arriere(self):
         os.remove(os.path.join(self.dossier, "pdf_recettes.py"))          # absent avant la mise à jour

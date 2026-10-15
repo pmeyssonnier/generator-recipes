@@ -379,6 +379,43 @@ class Taille(unittest.TestCase):
         self.assertNotIn("https://a.test/2", s._cache)
         self.assertIn("https://a.test/4", s._cache)
 
+    def test_cache_mesure_en_octets_et_page_trop_grosse_non_gardee(self):
+        s._cache.clear()
+        self.addCleanup(s._cache.clear)
+        self.assertEqual(s._octets("é"), 2)                              # pas len() : 2 octets pour 1 caractère
+        limite = 10_000
+        accentue = ("é" * (limite // 4 + 1)).encode()                    # ~0,5 × la limite en octets, 0,25 en caractères
+        with mock.patch.object(s, "MAX_CACHE_OCTETS", limite), \
+                mock.patch.object(s, "telecharger", return_value=(accentue, "utf-8")):
+            for i in range(3):
+                s.fetch(f"https://a.test/{i}")
+        self.assertLessEqual(sum(map(s._octets, s._cache.values())), limite)
+        self.assertEqual(len(s._cache), 1, "2 pages de ~0,5 limite ne tiennent pas : seule la dernière reste")
+        énorme = b"x" * (limite + 1)
+        s._cache.clear()
+        with mock.patch.object(s, "MAX_CACHE_OCTETS", limite), \
+                mock.patch.object(s, "telecharger", return_value=(énorme, "utf-8")) as tel:
+            s.fetch("https://a.test/enorme")
+            s.fetch("https://a.test/enorme")
+            self.assertEqual(tel.call_count, 2)                          # jamais gardée : retéléchargée
+        self.assertEqual(len(s._cache), 0)
+
+    def test_extraction_pdf_trop_grosse_non_gardee(self):
+        s._cache_pdf.clear()
+        s._cache_pdf_taille.clear()
+        self.addCleanup(lambda: (s._cache_pdf.clear(), s._cache_pdf_taille.clear()))
+        pdf = mock.Mock()
+        pdf.convertir.side_effect = lambda chemin, pers: ([{"nom": "é" * 600}], [])           # ~1,2 Ko en UTF-8
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(s, "DOSSIER_PDF", d), \
+                mock.patch.object(s, "MAX_CACHE_PDF_OCTETS", 1000), mock.patch.object(s, "_module_pdf", return_value=pdf):
+            with open(os.path.join(d, "gros.pdf"), "wb") as f:
+                f.write(b"%PDF")
+            recettes, _ = s.lire_pdf("gros.pdf")
+            self.assertEqual(len(recettes), 1)                           # le résultat est rendu...
+            self.assertEqual(len(s._cache_pdf), 0)                       # ...mais pas gardé en mémoire
+            s.lire_pdf("gros.pdf")
+            self.assertEqual(pdf.convertir.call_count, 2)
+
     def test_page_d_erreur_en_200_refusee_et_non_gardee(self):
         s._cache.clear()
         self.addCleanup(s._cache.clear)
@@ -401,7 +438,8 @@ class Taille(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d, mock.patch.object(s, "DOSSIER_PDF", d), \
                 mock.patch.object(s, "_module_pdf", return_value=pdf):
             for i in range(s.MAX_CACHE_PDF + 3):
-                open(os.path.join(d, f"f{i}.pdf"), "wb").write(b"%PDF")
+                with open(os.path.join(d, f"f{i}.pdf"), "wb") as f:
+                    f.write(b"%PDF")
                 s.lire_pdf(f"f{i}.pdf")
             self.assertEqual(len(s._cache_pdf), s.MAX_CACHE_PDF)
             self.assertEqual(set(s._cache_pdf), set(s._cache_pdf_taille))
