@@ -8,6 +8,11 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.6.1] - 2026-10-15
+
+### Corrigé
+- Filtres « Avec / Sans ces ingrédients » : sur téléphone, la touche Entrée du clavier n'ajoutait pas toujours le filtre. Le texte tapé **filtre désormais tout de suite**, un bouton **＋** (et Entrée, ou la sortie du champ) le garde sous forme d'étiquette, et plusieurs ingrédients peuvent être séparés par des virgules. La pastille du bouton ☰ Filtres en tient compte.
+
 ## [1.6.0] - 2026-10-15
 
 ### Ajouté
@@ -201,7 +206,8 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.6.0...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.1
 [1.6.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.0
 [1.5.2]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.5.2
 [1.5.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.5.1
