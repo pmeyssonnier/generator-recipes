@@ -10,12 +10,16 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [1.6.2] - 2026-10-15
 
+### Modifié
+- Tiroir de filtres sur téléphone : **seul « Ingrédients » est ouvert au départ** ; les groupes qui contiennent un filtre actif s'ouvrent d'eux-mêmes à chaque ouverture du tiroir, sans jamais en refermer. Sur grand écran, tout reste ouvert.
+- Compteur de recettes : « Aucune recette » à vide, « 6 recettes » sans filtre, « 2 sur 6 recettes » quand des filtres sont actifs (avant : « 0 / 0 recette »).
+
 ### Corrigé
 - **Mise à jour Termux transactionnelle** : `Recettes-maj` sauvegarde chaque fichier (`.bak`), les remplace un par un et, au premier échec, remet les anciens ; plus d'installation « mixte ». Si une restauration échoue aussi, la copie d'origine est gardée et signalée.
 - **Mise à jour Python** : une restauration qui échoue n'est plus passée sous silence ni annoncée comme réussie ; les fichiers `.bak` non restaurés sont conservés et listés (avant, ils étaient supprimés).
 - **Caches** mesurés en **octets** réels (UTF-8) et non en caractères ; une page ou une extraction de PDF seule plus grosse que la limite n'est plus gardée en mémoire (elle est rendue, puis oubliée).
 - **Release** : le workflow attend et exige que la CI complète (trois navigateurs, Windows, Python 3.9 et 3.13) soit verte sur le commit du tag avant de publier ; les tests de la release installent aussi `pdfplumber`.
-- Tests : fichiers fermés explicitement (plus de `ResourceWarning`).
+- Tests : fichiers fermés explicitement (plus de `ResourceWarning`) ; un test vérifie que la **règle d'identité des recettes** donne les mêmes regroupements dans le serveur (`cle_recette`) et dans la page (`cle`) sur un jeu de cas communs (URL, page de PDF, suffixe SEO, casse).
 
 ## [1.6.1] - 2026-10-15
 

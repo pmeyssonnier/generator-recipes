@@ -154,7 +154,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   <button type="button" id="btnFiltres" aria-controls="filtres" aria-expanded="false">☰ Filtres <span class="badge" id="nbFiltres" hidden>0</span></button>
   <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.6.2</small></h1>
   <div class="actions">
-    <span class="count" id="count">0 recette</span>
+    <span class="count" id="count">Aucune recette</span>
     <button type="button" class="primary" id="btnCharger">📂 Charger JSON</button>
     <input type="file" id="file" accept=".json,application/json" multiple hidden aria-label="Fichiers JSON à charger">
     <button id="btnImport">🌐 Importer</button>
@@ -569,7 +569,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     const grid = $("grid");
     const liste = st.surprise || filtrer();
     const vues = st.surprise ? liste : liste.slice(0, st.visibles);       // pagination
-    $("count").textContent = `${liste.length} / ${pluriel(recettes.length, "recette")}`;
+    $("count").textContent = !recettes.length ? "Aucune recette"
+      : liste.length === recettes.length ? pluriel(recettes.length, "recette")
+      : `${liste.length} sur ${pluriel(recettes.length, "recette")}`;
     $("nbPanier").textContent = st.panier.size;
 
     if (!recettes.length) {
@@ -910,7 +912,17 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // Téléphone : les filtres sont dans un tiroir à gauche (☰), fermé par ✕, le voile, « Voir les recettes » ou Échap.
   const tiroir = $("filtres"), voile = $("voile"), btnFiltres = $("btnFiltres");
   const mobile = () => window.matchMedia && matchMedia("(max-width:800px)").matches;
+  // Accordéons : tous ouverts sur grand écran ; dans le tiroir du téléphone, seul « Ingrédients » l'est au départ, et
+  // à chaque ouverture les groupes qui contiennent un filtre actif s'ouvrent aussi (sans jamais en refermer).
+  const groupes = [...document.querySelectorAll("details.fgrp")];
+  const groupeActif = d =>
+    d.querySelector("#avecIn") ? termes("avec").length + termes("sans").length > 0
+    : d.querySelector("#tmax") ? +$("tmax").value > 0 || +$("nmin").value > 0
+    : d.querySelector("#src") ? !!($("src").value || $("cat").value)
+    : $("favOnly").checked || $("tri").value !== "note";
+  groupes.forEach((d, i) => { if (mobile()) d.open = i === 0; });
   function ouvrirTiroir(ouvert) {
+    if (ouvert && mobile()) groupes.forEach(d => { if (groupeActif(d)) d.open = true; });
     tiroir.classList.toggle("ouvert", ouvert);
     voile.classList.toggle("ouvert", ouvert);
     btnFiltres.setAttribute("aria-expanded", String(ouvert));
@@ -926,7 +938,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   });
   $("btnSurprise").addEventListener("click", () => { if (tiroir.classList.contains("ouvert")) ouvrirTiroir(false); });
   if (window.matchMedia) matchMedia("(max-width:800px)").addEventListener?.("change", e => {
-    if (!e.matches) { tiroir.classList.remove("ouvert"); voile.classList.remove("ouvert"); document.body.style.overflow = ""; }
+    if (!e.matches) { groupes.forEach(d => { d.open = true; }); tiroir.classList.remove("ouvert"); voile.classList.remove("ouvert"); document.body.style.overflow = ""; }
   });
   // Pastille : nombre de filtres actifs, visible sur le bouton ☰
   function majPastille() {
