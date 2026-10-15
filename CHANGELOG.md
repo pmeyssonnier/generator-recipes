@@ -10,6 +10,9 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [1.6.1] - 2026-10-15
 
+### Modifié
+- Accordéons de filtres : flèche plus grande (chevron orange de 3 px) et zone tactile d'au moins 44 px de haut sur chaque titre.
+
 ### Corrigé
 - Filtres « Avec / Sans ces ingrédients » : sur téléphone, la touche Entrée du clavier n'ajoutait pas toujours le filtre. Le texte tapé **filtre désormais tout de suite**, un bouton **＋** (et Entrée, ou la sortie du champ) le garde sous forme d'étiquette, et plusieurs ingrédients peuvent être séparés par des virgules. La pastille du bouton ☰ Filtres en tient compte.
 
