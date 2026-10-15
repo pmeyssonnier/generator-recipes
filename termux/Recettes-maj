@@ -8,6 +8,15 @@ RACCOURCIS="${RECETTES_RACCOURCIS:-$HOME/.shortcuts}"
 
 attendre() { read -r -p "Entrée pour fermer" || true; }
 
+# Un serveur lancé avant la mise à jour garde l'ancien code en mémoire et occupe le port : on l'arrête (le suivant
+# démarrera avec les nouveaux fichiers). Le motif ne vise que « python serveur_recettes.py », pas ce script.
+arreter_serveur() {
+  command -v pkill >/dev/null 2>&1 || return 0
+  if pkill -f 'serveur_recettes\.py( |$)' >/dev/null 2>&1; then
+    echo "Ancien serveur arrêté : relance Recettes pour utiliser la nouvelle version."
+  fi
+}
+
 # Remplacement « tout ou rien » des fichiers $1.tmp : sauvegarde .bak de chacun, remplacement un par un, et au premier
 # échec retour à l'état d'avant. Une sauvegarde qui n'a pas pu être remise en place est gardée (.bak) et signalée.
 installer_fichiers() {
@@ -91,6 +100,7 @@ mettre_a_jour() {
     echo "pdf_recettes.py absent de la version $VERSION : la source eFarmz (PDF) restera indisponible."
   fi
   installer_fichiers $FICHIERS || { attendre; return 1; }
+  arreter_serveur
   echo "Mise à jour terminée :"; python serveur_recettes.py --version
   mettre_a_jour_raccourcis "$BASE"
   attendre

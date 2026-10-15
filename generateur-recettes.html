@@ -152,7 +152,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 
 <header>
   <button type="button" id="btnFiltres" aria-controls="filtres" aria-expanded="false">☰ Filtres <span class="badge" id="nbFiltres" hidden>0</span></button>
-  <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.6.2</small></h1>
+  <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.6.3</small></h1>
   <div class="actions">
     <span class="count" id="count">Aucune recette</span>
     <button type="button" class="primary" id="btnCharger">📂 Charger JSON</button>
@@ -705,7 +705,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // Un serveur local ancien (avant le POST) répond 501 / 405 : l'import se rabat alors sur GET,
   // et l'état du serveur indique qu'il faut le mettre à jour (git pull, puis relancer).
   let serveurAncien = false;
-  const VERSION = "1.6.2";                   // version de la page (même valeur que serveur_recettes.py)
+  const VERSION = "1.6.3";                   // version de la page (même valeur que serveur_recettes.py)
   function badgeServeur(base, fichier, version) {
     const s = $("srvStatus");
     s.className = "srv on";

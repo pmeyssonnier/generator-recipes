@@ -8,6 +8,11 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.6.3] - 2026-10-15
+
+### Corrigé
+- Termux : après une mise à jour réussie, `Recettes-maj` **arrête l'ancien serveur** encore en marche (il gardait l'ancien code et occupait le port 8765, d'où l'erreur « Address already in use » au lancement suivant). Il suffit de relancer **Recettes**. Rien n'est arrêté si la mise à jour échoue ou si la version est déjà à jour.
+
 ## [1.6.2] - 2026-10-15
 
 ### Modifié
@@ -222,7 +227,8 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.6.2...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.6.3...HEAD
+[1.6.3]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.3
 [1.6.2]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.2
 [1.6.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.1
 [1.6.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.0
