@@ -38,13 +38,31 @@ main{display:grid;grid-template-columns:280px 1fr;gap:20px;padding:20px;max-widt
 aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;height:fit-content;
   position:sticky;top:80px}
 @media (max-width:800px){aside{position:static}}
+/* Filtres : colonne à gauche sur grand écran, tiroir (☰) sur téléphone */
+.tiroir-tete,.tiroir-pied,#btnFiltres,#voile{display:none}
 @media (max-width:800px){
-  header{position:static;padding:10px 12px;gap:8px}      /* l'en-tête (3 lignes de boutons) ne mange plus l'écran en défilant */
-  header h1{font-size:1.1rem}
-  header .actions{gap:6px}
+  header{position:static;padding:10px 12px;gap:8px}
+  header h1{font-size:1.1rem;flex:1;min-width:0}
+  header .actions{gap:6px;width:100%}
   header .actions button{padding:6px 9px}
-  .row button{white-space:nowrap;padding:7px 8px}          /* « Surprends-moi » et « Réinitialiser » restent sur une ligne */
+  .row button{white-space:nowrap;padding:7px 8px}          /* « Surprends-moi » et « Réinitialiser » sur une ligne */
+  #btnFiltres{display:inline-flex;align-items:center;gap:6px}
+  aside{position:fixed;z-index:30;top:0;bottom:0;left:0;width:min(86vw,340px);height:auto;border-radius:0 16px 16px 0;
+    border-width:0 1px 0 0;overflow-y:auto;overscroll-behavior:contain;padding:0 16px;
+    transform:translateX(-102%);visibility:hidden;
+    transition:transform .22s ease,visibility 0s linear .22s;box-shadow:var(--shadow)}
+  aside.ouvert{transform:none;visibility:visible;transition:transform .22s ease,visibility 0s;box-shadow:0 0 40px rgba(0,0,0,.35)}
+  #voile{display:block;position:fixed;inset:0;z-index:29;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;
+    transition:opacity .22s ease}
+  #voile.ouvert{opacity:1;pointer-events:auto}
+  .tiroir-tete{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1;
+    background:var(--panel);padding:14px 0 10px;border-bottom:1px solid var(--line);font-size:1.1rem}
+  .tiroir-pied{display:block;position:sticky;bottom:0;background:var(--panel);padding:12px 0 16px;margin-top:12px;
+    border-top:1px solid var(--line)}
+  .tiroir-pied button{width:100%}
+  .fgrp:first-of-type{margin-top:0}
 }
+@media (prefers-reduced-motion:reduce){aside,#voile{transition:none!important}}
 aside label{display:block;font-weight:600;font-size:.85rem;margin:14px 0 6px}
 aside label:first-child{margin-top:0}
 .fgrp{border-top:1px solid var(--line);padding:10px 0}
@@ -131,6 +149,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 <body>
 
 <header>
+  <button type="button" id="btnFiltres" aria-controls="filtres" aria-expanded="false">☰ Filtres <span class="badge" id="nbFiltres" hidden>0</span></button>
   <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.6.0</small></h1>
   <div class="actions">
     <span class="count" id="count">0 recette</span>
@@ -146,7 +165,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 <div id="toasts" role="status" aria-live="polite"></div>
 
 <main>
-  <aside>
+  <div id="voile" aria-hidden="true"></div>
+  <aside id="filtres" aria-label="Filtres">
+    <div class="tiroir-tete"><strong>Filtres</strong><button type="button" class="icon-btn" id="btnFermerFiltres" aria-label="Fermer les filtres">✕</button></div>
     <label for="q">Recherche</label>
     <input type="text" id="q" placeholder="Nom, catégorie, mot-clé…">
 
@@ -199,6 +220,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       <button class="primary" id="btnSurprise">🎲 Surprends-moi</button>
       <button id="btnReset">Réinitialiser</button>
     </div>
+    <div class="tiroir-pied"><button type="button" class="primary" id="btnVoirRecettes">Voir les recettes</button></div>
   </aside>
 
   <section id="grid"></section>
@@ -870,9 +892,36 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
   $("btnSurprise").addEventListener("click", surprise);
 
-  // Téléphone : les groupes de filtres démarrent repliés pour laisser la place aux recettes.
-  if (window.matchMedia && matchMedia("(max-width:800px)").matches)
-    document.querySelectorAll("details.fgrp").forEach(d => d.open = false);
+  // Téléphone : les filtres sont dans un tiroir à gauche (☰), fermé par ✕, le voile, « Voir les recettes » ou Échap.
+  const tiroir = $("filtres"), voile = $("voile"), btnFiltres = $("btnFiltres");
+  const mobile = () => window.matchMedia && matchMedia("(max-width:800px)").matches;
+  function ouvrirTiroir(ouvert) {
+    tiroir.classList.toggle("ouvert", ouvert);
+    voile.classList.toggle("ouvert", ouvert);
+    btnFiltres.setAttribute("aria-expanded", String(ouvert));
+    document.body.style.overflow = ouvert ? "hidden" : "";
+    if (ouvert) $("btnFermerFiltres").focus(); else if (mobile()) btnFiltres.focus();
+  }
+  btnFiltres.addEventListener("click", () => ouvrirTiroir(true));
+  $("btnFermerFiltres").addEventListener("click", () => ouvrirTiroir(false));
+  $("btnVoirRecettes").addEventListener("click", () => ouvrirTiroir(false));
+  voile.addEventListener("click", () => ouvrirTiroir(false));
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && tiroir.classList.contains("ouvert") && !document.querySelector("dialog[open]")) ouvrirTiroir(false);
+  });
+  $("btnSurprise").addEventListener("click", () => { if (tiroir.classList.contains("ouvert")) ouvrirTiroir(false); });
+  if (window.matchMedia) matchMedia("(max-width:800px)").addEventListener?.("change", e => {
+    if (!e.matches) { tiroir.classList.remove("ouvert"); voile.classList.remove("ouvert"); document.body.style.overflow = ""; }
+  });
+  // Pastille : nombre de filtres actifs, visible sur le bouton ☰
+  function majPastille() {
+    const n = [$("q").value.trim(), st.avec.length, st.sans.length, +$("tmax").value, +$("nmin").value,
+               $("src").value, $("cat").value, $("favOnly").checked].filter(Boolean).length;
+    $("nbFiltres").textContent = n; $("nbFiltres").hidden = n === 0;
+  }
+  tiroir.addEventListener("input", () => setTimeout(majPastille));
+  tiroir.addEventListener("change", () => setTimeout(majPastille));
+  tiroir.addEventListener("click", () => setTimeout(majPastille));
   $("btnReset").addEventListener("click", () => {
     Object.assign(st, { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", src:"", tri:"note", favOnly:false, surprise:null, visibles:PAGE });
     $("q").value = ""; $("tmax").value = 0; $("tmaxVal").textContent = "illimité";

@@ -13,7 +13,8 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 ### Ajouté
 - `outils/changer_version.py X.Y.Z` : change la version dans les trois fichiers d'un coup (et prépare la section du journal).
 - Port du serveur local personnalisable quand la page est ouverte hors serveur (GitHub Pages, fichier) : lien `…/generateur-recettes.html?port=8766`, retenu ensuite. La politique de sécurité autorise `localhost` et `127.0.0.1` sur tout port.
-- Filtres regroupés en **accordéons** (Ingrédients, Temps et note, Source et catégorie, Tri et favoris) : ouverts sur grand écran, **repliés au démarrage sur téléphone** pour laisser la place aux recettes ; dépliables au clic et au clavier.
+- Filtres regroupés en **accordéons** (Ingrédients, Temps et note, Source et catégorie, Tri et favoris).
+- **Tiroir de filtres sur téléphone** : un bouton « ☰ Filtres » (avec la pastille du nombre de filtres actifs) ouvre un panneau qui glisse depuis la gauche, avec un voile derrière ; il se ferme par ✕, « Voir les recettes », un clic sur le voile ou Échap. Sur grand écran, les filtres restent dans la colonne de gauche.
 
 ### Modifié
 - Mobile : l'en-tête ne reste plus collé en haut de l'écran, boutons plus compacts, « Surprends-moi » et « Réinitialiser » sur une seule ligne.

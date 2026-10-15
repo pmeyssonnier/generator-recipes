@@ -740,14 +740,39 @@ class Interface(unittest.TestCase):
         self.assertFalse(self.page.is_visible("#cat"))
         self.page.click("details.fgrp:has(#cat) > summary")
         self.assertTrue(self.page.is_visible("#cat"))
+        self.assertFalse(self.page.is_visible("#btnFiltres"))            # grand écran : pas de ☰
+        self.assertFalse(self.page.is_visible("#btnFermerFiltres"))
+
+    def test_filtres_en_tiroir_sur_telephone(self):
         self.page.set_viewport_size({"width": 400, "height": 800})
         self.ouvrir()
-        self.assertEqual(self.page.locator("details.fgrp[open]").count(), 0)
-        self.assertFalse(self.page.is_visible("#cat"))
-        self.page.focus("details.fgrp:has(#cat) > summary")
-        self.page.keyboard.press("Enter")
+        self.charger([recette(1, categorie="Plat", note=4.8), recette(2, categorie="Dessert", note=3.2)])
+        self.assertTrue(self.page.is_visible("#btnFiltres"))
+        self.assertFalse(self.page.is_visible("#cat"), "le tiroir est fermé au départ")
+        self.assertEqual(self.page.get_attribute("#btnFiltres", "aria-expanded"), "false")
+        self.page.click("#btnFiltres")
+        self.page.wait_for_selector("#cat", state="visible")
+        self.assertEqual(self.page.get_attribute("#btnFiltres", "aria-expanded"), "true")
+        self.assertEqual(self.page.evaluate("document.activeElement.id"), "btnFermerFiltres")
+        self.page.select_option("#cat", "Dessert")
+        self.assertEqual(self.noms_affiches(), ["Recette 2"])            # le filtre agit pendant que le tiroir est ouvert
+        self.assertEqual(self.page.inner_text("#nbFiltres"), "1")
+        self.page.click("#btnVoirRecettes")                             # fermeture par le bouton du bas
+        self.page.wait_for_selector("#cat", state="hidden")
+        self.assertEqual(self.page.evaluate("document.activeElement.id"), "btnFiltres")
+        self.page.click("#btnFiltres")
+        self.page.keyboard.press("Escape")                              # Échap
+        self.page.wait_for_selector("#cat", state="hidden")
+        self.page.click("#btnFiltres")
+        self.page.click("#voile", position={"x": 380, "y": 400})        # clic sur le voile
+        self.page.wait_for_selector("#cat", state="hidden")
+        self.page.click("#btnFiltres")
+        self.page.click("#btnReset")
+        self.assertTrue(self.page.is_hidden("#nbFiltres"))
+        self.page.click("#btnFermerFiltres")                            # ✕
+        self.page.wait_for_selector("#cat", state="hidden")
+        self.page.set_viewport_size({"width": 1200, "height": 800})     # retour grand écran : colonne visible
         self.assertTrue(self.page.is_visible("#cat"))
-        self.assertTrue(self.page.is_visible("#btnSurprise"))        # les boutons restent accessibles
 
     def test_filtres_tri_et_reinitialisation(self):
         self.ouvrir()
