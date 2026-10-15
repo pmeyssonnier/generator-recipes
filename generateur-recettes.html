@@ -67,13 +67,15 @@ aside label{display:block;font-weight:600;font-size:.85rem;margin:14px 0 6px}
 aside label:first-child{margin-top:0}
 .fgrp{border-top:1px solid var(--line);padding:10px 0}
 .fgrp:first-of-type{border-top:none;padding-top:0;margin-top:14px}
-.fgrp>summary{cursor:pointer;font-weight:700;font-size:.9rem;padding:4px 0;list-style:none;display:flex;
-  justify-content:space-between;align-items:center}
+.fgrp>summary{cursor:pointer;font-weight:700;font-size:.9rem;padding:4px 0;min-height:44px;list-style:none;display:flex;
+  justify-content:space-between;align-items:center;gap:8px}
 .fgrp>summary::-webkit-details-marker{display:none}
-.fgrp>summary::after{content:"▾";color:var(--muted);transition:transform .15s}
-.fgrp:not([open])>summary::after{transform:rotate(-90deg)}
+.fgrp>summary::after{content:"";flex:none;width:11px;height:11px;margin:0 10px 4px 0;border-right:3px solid var(--accent);
+  border-bottom:3px solid var(--accent);transform:rotate(45deg);transition:transform .15s}
+.fgrp:not([open])>summary::after{transform:rotate(-45deg);margin:0 10px 0 0}
 .fgrp>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 .fgrp>summary+label{margin-top:8px}
+aside>label[for=q]{margin-top:16px}
 input[type=text],select{width:100%;font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;
   background:var(--bg);color:var(--text)}
 input[type=range]{width:100%;accent-color:var(--accent)}
@@ -136,7 +138,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 [hidden]{display:none!important}
   sup.frac{font-size:.7em;line-height:0}
 .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.inline input[type=text]{flex:1;min-width:180px}
+.inline input[type=text]{flex:1;min-width:0}
 .inline input[type=number]{width:70px;font:inherit;padding:7px;border:1px solid var(--line);border-radius:8px;
   background:var(--bg);color:var(--text)}
 .log{font-family:ui-monospace,Consolas,monospace;font-size:.8rem;background:var(--bg);border:1px solid var(--line);
@@ -150,7 +152,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 
 <header>
   <button type="button" id="btnFiltres" aria-controls="filtres" aria-expanded="false">☰ Filtres <span class="badge" id="nbFiltres" hidden>0</span></button>
-  <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.6.0</small></h1>
+  <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.6.1</small></h1>
   <div class="actions">
     <span class="count" id="count">0 recette</span>
     <button type="button" class="primary" id="btnCharger">📂 Charger JSON</button>
@@ -174,13 +176,13 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     <details class="fgrp" open>
     <summary>🥕 Ingrédients</summary>
     <label for="avecIn">Avec ces ingrédients</label>
-    <input type="text" id="avecIn" placeholder="ex. poulet  ↵">
+    <div class="inline"><input type="text" id="avecIn" placeholder="ex. poulet" enterkeyhint="done" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" id="avecAdd" aria-label="Garder ce filtre « avec »" title="Garder ce filtre">＋</button></div>
     <div class="chips" id="avecChips"></div>
 
     <label for="sansIn">Sans ces ingrédients</label>
-    <input type="text" id="sansIn" placeholder="ex. crème  ↵">
+    <div class="inline"><input type="text" id="sansIn" placeholder="ex. crème" enterkeyhint="done" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" id="sansAdd" aria-label="Garder ce filtre « sans »" title="Garder ce filtre">＋</button></div>
     <div class="chips" id="sansChips"></div>
-    <div class="hint">Entrée pour ajouter, clic sur une étiquette pour la retirer. Accents ignorés.</div>
+    <div class="hint">Le filtre s'applique dès que tu tapes. ＋ ou Entrée le garde sous forme d'étiquette (sépare plusieurs ingrédients par des virgules) ; un clic sur l'étiquette la retire. Accents ignorés.</div>
     </details>
 
     <details class="fgrp" open>
@@ -304,7 +306,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // ---------- État ----------
   const PAGE = 48;                           // cartes affichées par « page » (bouton « Afficher plus »)
   let recettes = [];
-  const st = { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", src:"", tri:"note", favOnly:false,
+  const st = { pend:{ avec:"", sans:"" }, q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", src:"", tri:"note", favOnly:false,
                surprise:null, visibles:PAGE, panier:new Set(), favs:new Set() };
 
   // ---------- Stockage local ----------
@@ -537,12 +539,14 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
 
   // ---------- Filtrage ----------
+  // Ingrédients retenus + celui en cours de frappe (appliqué tout de suite, sans attendre Entrée)
+  const termes = k => [...st[k], ...(st.pend[k] ? [st.pend[k]] : [])].map(x => x.trim()).filter(Boolean);
   function filtrer() {
     const q = norm(st.q).trim();
     const out = recettes.filter(r => {
       if (q && !r._txt.includes(q)) return false;
-      if (st.avec.some(x => !r._ing.includes(norm(x)))) return false;
-      if (st.sans.some(x => r._ing.includes(norm(x)))) return false;
+      if (termes("avec").some(x => !r._ing.includes(norm(x)))) return false;
+      if (termes("sans").some(x => r._ing.includes(norm(x)))) return false;
       if (st.tmax && (r._tps == null || r._tps > st.tmax)) return false;
       if (st.nmin && (r._note ?? 0) < st.nmin) return false;
       if (st.cat && !r._cats.includes(st.cat)) return false;
@@ -699,7 +703,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // Un serveur local ancien (avant le POST) répond 501 / 405 : l'import se rabat alors sur GET,
   // et l'état du serveur indique qu'il faut le mettre à jour (git pull, puis relancer).
   let serveurAncien = false;
-  const VERSION = "1.6.0";                   // version de la page (même valeur que serveur_recettes.py)
+  const VERSION = "1.6.1";                   // version de la page (même valeur que serveur_recettes.py)
   function badgeServeur(base, fichier, version) {
     const s = $("srvStatus");
     s.className = "srv on";
@@ -867,13 +871,24 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   $("tri").addEventListener("change", e => { st.tri = e.target.value; filtreChange(); });
   $("favOnly").addEventListener("change", e => { st.favOnly = e.target.checked; filtreChange(); });
 
+  // Garde le texte du champ comme étiquette(s) ; « poulet, crème » en donne deux. Renvoie true s'il y avait quelque chose.
+  function garderTerme(k) {
+    const champ = $(k + "In");
+    const nouveaux = champ.value.split(",").map(x => x.trim()).filter(Boolean);
+    nouveaux.forEach(v => { if (!st[k].some(x => norm(x) === norm(v))) st[k].push(v); });
+    champ.value = ""; st.pend[k] = "";
+    renderChips(); filtreChange(); majPastille();
+    return nouveaux.length > 0;
+  }
   for (const k of ["avec", "sans"]) {
-    $(k + "In").addEventListener("keydown", e => {
-      if (e.key !== "Enter") return;
-      const v = e.target.value.trim();
-      if (v && !st[k].includes(v)) st[k].push(v);
-      e.target.value = ""; renderChips(); filtreChange();
+    const champ = $(k + "In");
+    champ.addEventListener("input", () => { st.pend[k] = champ.value; filtreChange(); majPastille(); });
+    champ.addEventListener("keydown", e => {
+      // Les claviers de téléphone envoient parfois keyCode 13 sans key « Enter »
+      if (e.key === "Enter" || e.keyCode === 13) { e.preventDefault(); garderTerme(k); }
     });
+    champ.addEventListener("blur", () => { if (champ.value.trim()) garderTerme(k); });
+    $(k + "Add").addEventListener("click", () => { garderTerme(k); champ.focus(); });
     $(k + "Chips").addEventListener("click", e => {
       const c = e.target.closest(".chip"); if (!c) return;
       st[c.dataset.k].splice(+c.dataset.j, 1); renderChips(); filtreChange();
@@ -915,7 +930,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   });
   // Pastille : nombre de filtres actifs, visible sur le bouton ☰
   function majPastille() {
-    const n = [$("q").value.trim(), st.avec.length, st.sans.length, +$("tmax").value, +$("nmin").value,
+    const n = [$("q").value.trim(), termes("avec").length, termes("sans").length, +$("tmax").value, +$("nmin").value,
                $("src").value, $("cat").value, $("favOnly").checked].filter(Boolean).length;
     $("nbFiltres").textContent = n; $("nbFiltres").hidden = n === 0;
   }
@@ -926,6 +941,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     Object.assign(st, { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", src:"", tri:"note", favOnly:false, surprise:null, visibles:PAGE });
     $("q").value = ""; $("tmax").value = 0; $("tmaxVal").textContent = "illimité";
     $("nmin").value = "0"; $("cat").value = ""; $("src").value = ""; $("tri").value = "note"; $("favOnly").checked = false;
+    st.pend = { avec:"", sans:"" }; $("avecIn").value = ""; $("sansIn").value = "";
     renderChips(); render(); majPastille();
   });
 

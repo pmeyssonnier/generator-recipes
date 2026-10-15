@@ -472,6 +472,43 @@ class Interface(unittest.TestCase):
         self.page.fill("#q", "Recette 4")
         self.assertEqual(self.noms_affiches(), ["Recette 4"])
 
+    def test_filtre_ingredients_des_la_frappe_et_bouton_plus(self):
+        """Sur téléphone, Entrée n'arrive pas toujours : le texte tapé filtre tout de suite, ＋ le garde en étiquette."""
+        self.ouvrir()
+        self.charger([recette(1, ingredients=["poulet", "crème"]), recette(2, ingredients=["poulet", "riz"]),
+                      recette(3, ingredients=["veau", "crème"])])
+        compte = lambda: self.page.locator(".card").count()           # noqa: E731
+        self.page.fill("#avecIn", "poulet")                            # sans Entrée
+        self.page.wait_for_function("() => document.querySelectorAll('.card').length === 2", polling=100)
+        self.assertEqual(self.page.locator("#avecChips .chip").count(), 0)
+        self.page.click("#avecAdd")                                     # ＋ : devient une étiquette
+        self.assertEqual(self.page.locator("#avecChips .chip").count(), 1)
+        self.assertEqual(self.page.input_value("#avecIn"), "")
+        self.assertEqual(compte(), 2)
+        self.page.fill("#sansIn", "crème")                              # « sans » aussi, dès la frappe
+        self.page.wait_for_function("() => document.querySelectorAll('.card').length === 1", polling=100)
+        self.assertEqual(self.noms_affiches(), ["Recette 2"])
+        self.page.fill("#sansIn", "")                                   # effacer le texte retire le filtre
+        self.page.wait_for_function("() => document.querySelectorAll('.card').length === 2", polling=100)
+        self.page.fill("#sansIn", "riz, crème")                         # plusieurs ingrédients séparés par des virgules
+        self.page.press("#sansIn", "Enter")
+        self.assertEqual(self.page.locator("#sansChips .chip").count(), 2)
+        self.assertEqual(compte(), 0)
+        self.page.click("#btnReset")
+        self.assertEqual(compte(), 3)
+        self.assertEqual(self.page.locator(".chip").count(), 0)
+
+    def test_filtre_ingredients_clavier_mobile_et_perte_de_focus(self):
+        self.ouvrir()
+        self.charger([recette(1, ingredients=["poulet"]), recette(2, ingredients=["veau"])])
+        self.page.fill("#avecIn", "poulet")
+        self.page.eval_on_selector("#avecIn", "e => e.dispatchEvent(new KeyboardEvent('keydown', "
+                                              "{ key: 'Unidentified', keyCode: 13, bubbles: true }))")
+        self.assertEqual(self.page.locator("#avecChips .chip").count(), 1)       # clavier qui n'envoie que keyCode 13
+        self.page.fill("#sansIn", "veau")
+        self.page.focus("#q")                                                     # quitter le champ garde le terme
+        self.assertEqual(self.page.locator("#sansChips .chip").count(), 1)
+
     # ---------- pagination ----------
     def test_pagination(self):
         self.ouvrir()
