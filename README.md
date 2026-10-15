@@ -138,6 +138,8 @@ ajoute un widget « Termux shortcut ». Le dossier des recettes par défaut est
 `~/storage/downloads/recettes` ; `RECETTES_DOSSIER=…` en choisit un autre, et `RECETTES_VERSION=…` impose la version téléchargée par `Recettes-maj` (un numéro, par exemple `v1.1.1`, ou `main`).
 Sans cette variable, `Recettes-maj` cherche **la dernière release publiée** sur GitHub, télécharge les fichiers de cette version,
 puis remplace aussi les scripts `Recettes` et `Recettes-maj` de `~/.shortcuts` : plus besoin de relancer l'installateur à chaque version.
+Un serveur déjà lancé garde l'ancien code et occupe le port : après une mise à jour réussie, `Recettes-maj` l'arrête
+automatiquement (il suffit ensuite de relancer **Recettes**).
 Ces scripts exécutent du code téléchargé depuis ce dépôt : relis-les avant de les installer.
 
 ### Google Colab

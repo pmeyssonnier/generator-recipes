@@ -23,6 +23,7 @@ if [ -n "$out" ]; then cp "$FAUX_SOURCES/$(basename "$url")" "$out"; else cat "$
 """
 FAUX_PYTHON = '#!/bin/bash\nexec "%s" "$@"\n' % sys.executable
 FAUX_PYTHON_ESPION = '#!/bin/bash\necho "python $* (dans $(pwd))" >> "$FAUX_JOURNAL"\n'
+FAUX_PKILL = '#!/bin/bash\necho "pkill $*" >> "$FAUX_JOURNAL.pkill"\n[ -n "$FAUX_PKILL_TROUVE" ]\n'
 FAUX_VERROU = '#!/bin/bash\necho "$(basename "$0")" >> "$FAUX_JOURNAL"\n'
 
 
@@ -46,6 +47,7 @@ class ScriptsTermux(unittest.TestCase):
             os.makedirs(d)
         open(self.journal, "w").close()
         ecrire(os.path.join(self.bin, "curl"), FAUX_CURL)
+        ecrire(os.path.join(self.bin, "pkill"), FAUX_PKILL)               # jamais le vrai pkill dans les tests
 
     def lancer(self, script, sources=RACINE, **env_extra):
         env = dict(os.environ, HOME=self.home, FAUX_JOURNAL=self.journal, FAUX_SOURCES=sources,
@@ -64,6 +66,13 @@ class ScriptsTermux(unittest.TestCase):
         with open(os.path.join(d, "latest"), "w", encoding="utf-8") as f:
             f.write('{\n  "url": "x",\n  "tag_name": "%s",\n  "name": "Une release"\n}\n' % tag)
         return d
+
+    def appels_pkill(self):
+        try:
+            with open(self.journal + ".pkill", encoding="utf-8") as f:
+                return f.read().splitlines()
+        except FileNotFoundError:
+            return []
 
     def journal_lignes(self):
         with open(self.journal, encoding="utf-8") as f:
@@ -104,6 +113,38 @@ class ScriptsTermux(unittest.TestCase):
         self.assertTrue(all("/v9.9.9/" in u for u in lignes[1:]), "les fichiers viennent de la release trouvée")
         self.assertIn("Version : v9.9.9", r.stdout)
         self.assertIn("serveur_recettes ", r.stdout)                    # --version affichée
+
+    def test_maj_arrete_l_ancien_serveur(self):
+        ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
+        for nom in ("serveur_recettes.py", "generateur-recettes.html"):
+            ecrire(os.path.join(self.dossier, nom), "ANCIEN", executable=False)
+        r = self.lancer("Recettes-maj", sources=self.sources_release(), RECETTES_DOSSIER=self.dossier,
+                        FAUX_PKILL_TROUVE="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.appels_pkill(), ["pkill -f serveur_recettes\\.py( |$)"])
+        self.assertIn("Ancien serveur arrêté : relance Recettes", r.stdout)
+
+    def test_maj_sans_serveur_en_cours_ne_dit_rien(self):
+        ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
+        r = self.lancer("Recettes-maj", sources=self.sources_release(), RECETTES_DOSSIER=self.dossier)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("Ancien serveur", r.stdout)                       # pkill appelé, rien trouvé
+
+    def test_maj_ne_touche_pas_au_serveur_si_rien_n_est_installe(self):
+        ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
+        for nom in ("serveur_recettes.py", "generateur-recettes.html"):
+            ecrire(os.path.join(self.dossier, nom), "ANCIEN", executable=False)
+        r = self.lancer("Recettes-maj", sources=self.sources_release(), RECETTES_DOSSIER=self.dossier,
+                        FAUX_ECHEC_SUR="generateur-recettes.html", FAUX_PKILL_TROUVE="1")
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(self.appels_pkill(), [], "échec : le serveur en cours reste")
+
+    def test_motif_d_arret_vise_seulement_le_serveur(self):
+        motif = r"serveur_recettes\.py( |$)"
+        for visee in ("python serveur_recettes.py", "python3 /x/serveur_recettes.py", "python serveur_recettes.py --port"):
+            self.assertTrue(subprocess.run(["grep", "-Eq", motif], input=visee, text=True).returncode == 0, visee)
+        for epargnee in ("bash /h/.shortcuts/Recettes-maj", "vim serveur_recettes.py.tmp", "python tester_sources.py"):
+            self.assertFalse(subprocess.run(["grep", "-Eq", motif], input=epargnee, text=True).returncode == 0, epargnee)
 
     def test_maj_ne_revient_pas_en_arriere(self):
         """Serveur installé en 1.5.1 (après « main »), dernière release publiée 1.5.0 : rien n'est téléchargé ni remplacé."""
