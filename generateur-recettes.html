@@ -8,7 +8,7 @@
 <style>
 :root{
   --bg:#faf7f2; --panel:#ffffff; --text:#2b2620; --muted:#7a7066; --line:#e8e1d7;
-  --accent:#c2541b; --accent-soft:#fbe9df; --ok:#2e7d4f; --ok-soft:#e3f3e9; --ko:#b3261e; --ko-soft:#fbe4e2;
+  --accent:#c2541b; --accent-soft:#fbe9df; --ok:#27693f; --ok-soft:#e3f3e9; --ko:#b3261e; --ko-soft:#fbe4e2;
   --shadow:0 1px 3px rgba(0,0,0,.08);
 }
 @media (prefers-color-scheme:dark){
@@ -44,7 +44,7 @@ input[type=text],select{width:100%;font:inherit;padding:7px 9px;border:1px solid
   background:var(--bg);color:var(--text)}
 input[type=range]{width:100%;accent-color:var(--accent)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.chip{font-size:.82rem;padding:3px 8px;border-radius:12px;cursor:pointer;user-select:none}
+.chip{font-size:.82rem;padding:3px 8px;border:0;border-radius:12px;cursor:pointer;user-select:none}
 .chip.avec{background:var(--ok-soft);color:var(--ok)}
 .chip.sans{background:var(--ko-soft);color:var(--ko)}
 .chip::after{content:" ×";opacity:.7}
@@ -118,15 +118,16 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.5.1</small></h1>
   <div class="actions">
     <span class="count" id="count">0 recette</span>
-    <label class="btn primary" for="file">📂 Charger JSON</label>
-    <input type="file" id="file" accept=".json,application/json" multiple hidden>
+    <button type="button" class="primary" id="btnCharger">📂 Charger JSON</button>
+    <input type="file" id="file" accept=".json,application/json" multiple hidden aria-label="Fichiers JSON à charger">
     <button id="btnImport">🌐 Importer</button>
     <button id="btnExport" title="Sauvegarder en JSON">💾 Exporter</button>
-    <span class="srv off" id="srvStatus" title="Serveur Python local">● hors ligne</span>
+    <span class="srv off" id="srvStatus" role="status" title="Serveur Python local">● hors ligne</span>
     <button id="btnPanier">🛒 Courses <span class="badge" id="nbPanier">0</span></button>
     <button id="btnClear" title="Vider la base locale">🗑</button>
   </div>
 </header>
+<div id="toasts" role="status" aria-live="polite"></div>
 
 <main>
   <aside>
@@ -207,13 +208,13 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   <div class="dlg-body">
     <h4>Recherche</h4>
     <div class="inline" style="margin-bottom:8px">
-      <select id="impSrc" style="width:auto"><option value="marmiton">Marmiton</option></select>
+      <select id="impSrc" style="width:auto" aria-label="Source des recettes"><option value="marmiton">Marmiton</option></select>
       <span class="hint" id="impSrcAide" style="margin:0"></span>
     </div>
     <div class="inline">
-      <input type="text" id="impQ" placeholder="ex. blanquette, curry de légumes…">
-      <input type="number" id="impN" value="10" min="1" max="50" title="Nombre max de résultats">
-      <input type="number" id="impPers" value="2" min="1" max="12" title="Quantités pour N personnes (colonne 1p…6p du PDF)" hidden>
+      <input type="text" id="impQ" aria-label="Mot-clé ou titre à chercher" placeholder="ex. blanquette, curry de légumes…">
+      <input type="number" id="impN" value="10" min="1" max="50" title="Nombre max de résultats" aria-label="Nombre maximum de résultats">
+      <input type="number" id="impPers" value="2" min="1" max="12" title="Quantités pour N personnes (colonne 1p…6p du PDF)" aria-label="Nombre de personnes" hidden>
       <button class="primary" id="impSearch">Rechercher</button>
     </div>
     <ul class="res" id="impRes"></ul>
@@ -223,10 +224,10 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     </div>
     <h4>Ou une URL : recette, ou page qui en liste plusieurs</h4>
     <div class="inline">
-      <input type="text" id="impUrl" placeholder="Recette ou sélection (Marmiton, Ricardo, PtitChef, Cuisine AZ…)">
+      <input type="text" id="impUrl" aria-label="Adresse d'une recette ou d'une page de sélection" placeholder="Recette ou sélection (Marmiton, Ricardo, PtitChef, Cuisine AZ…)">
       <button id="impUrlGo">Importer</button>
     </div>
-    <div class="log" id="impLog"></div>
+    <div class="log" id="impLog" role="log" aria-live="polite" aria-label="Journal de l'import"></div>
   </div>
 </dialog>
 
@@ -277,10 +278,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem(KEY) || "null");
-      if (d) {
-        recettes = d.recettes || [];
-        st.panier = new Set(d.panier || []);
-        st.favs = new Set(d.favs || []);
+      if (d && typeof d === "object") {
+        recettes = (Array.isArray(d.recettes) ? d.recettes : []).map(normaliserRecette).filter(Boolean);
+        const cles = v => new Set((Array.isArray(v) ? v : []).filter(x => typeof x === "string"));
+        st.panier = cles(d.panier);
+        st.favs = cles(d.favs);
       }
     } catch (e) { console.warn("Lecture impossible :", e); }
   }
@@ -359,6 +361,31 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const cle = r => r.url || (estPdf(r) ? "pdf:" + r.source : "nom:" + nettoyerNom(r.nom));
   const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
+  // Validation d'une recette venue d'un JSON (fichier chargé, stockage du navigateur, serveur) : un JSON valide
+  // peut avoir n'importe quelle forme. Renvoie une copie propre, ou null si ce n'est pas une recette (sans nom).
+  const MAX_LISTE = 300, MAX_TEXTE = 4000;
+  const texte = v => (typeof v === "string" ? v : typeof v === "number" && isFinite(v) ? String(v) : "").slice(0, MAX_TEXTE);
+  const liste = v => (Array.isArray(v) ? v : typeof v === "string" ? v.split(/\r?\n/) : []).slice(0, MAX_LISTE)
+    .map(x => texte(x).trim()).filter(Boolean);
+  const nombre = v => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(",", ".")); return isFinite(n) ? n : null; };
+  function normaliserRecette(brut) {
+    if (!brut || typeof brut !== "object" || Array.isArray(brut)) return null;
+    const r = Object.fromEntries(Object.entries(brut).filter(([k]) => !k.startsWith("_")));   // champs internes (_ing…) jamais repris
+    if (typeof brut.nom !== "string") return null;                   // le nom doit être du texte
+    r.nom = nettoyerNom(brut.nom).slice(0, 300);
+    if (!r.nom) return null;
+    r.url = urlSure(brut.url);
+    r.image = imageSure(brut.image);
+    r.source = texte(brut.source).trim();
+    for (const k of ["cuisine", "portions", "difficulte", "cout"]) if (k in r) r[k] = texte(brut[k]);
+    r.categorie = Array.isArray(brut.categorie) ? liste(brut.categorie) : texte(brut.categorie);
+    if ("mots_cles" in r) r.mots_cles = Array.isArray(brut.mots_cles) ? liste(brut.mots_cles) : texte(brut.mots_cles);
+    r.ingredients = liste(brut.ingredients);
+    r.etapes = liste(brut.etapes);
+    for (const k of ["note", "nb_avis", "prep_min", "cuisson_min", "total_min"]) if (k in r) r[k] = nombre(brut[k]);
+    return r;
+  }
+
   function indexer(r) {
     r.nom = nettoyerNom(r.nom);
     r.url = urlSure(r.url);
@@ -380,7 +407,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     t.textContent = msg;
     Object.assign(t.style, { position:"fixed", bottom:"20px", left:"50%", transform:"translateX(-50%)",
       background:"var(--text)", color:"var(--bg)", padding:"10px 18px", borderRadius:"8px", zIndex:99 });
-    document.body.appendChild(t);
+    $("toasts").appendChild(t);                      // zone role="status" : annoncé par les lecteurs d'écran
     setTimeout(() => t.remove(), duree);
   }
 
@@ -389,16 +416,17 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // Seules les recettes reçues sont (ré)indexées. Avec differe = true, l'enregistrement
   // et l'affichage sont repoussés : l'appelant termine par valider() (import en lot).
   function importer(data, { differe = false } = {}) {
-    const arr = Array.isArray(data) ? data : (data.recettes || [data]);
+    const arr = Array.isArray(data) ? data
+      : data && typeof data === "object" ? (Array.isArray(data.recettes) ? data.recettes : [data]) : [];
+    const valides = arr.map(b => [b, normaliserRecette(b)]).filter(([, r]) => r);       // rien n'est modifié avant cette étape
+    importer.ignorees = arr.length - valides.length;
     const parUrl = new Map(recettes.map(r => [cleImport(r), r]));
     const recues = new Set();
     let ajout = 0;
-    for (const r of arr) {
-      if (!r || !r.nom) continue;
-      r.url = urlSure(r.url);
+    for (const [brut, r] of valides) {
       const k = cleImport(r);
       if (!parUrl.has(k)) ajout++;
-      if (r.favori === true) st.favs.add(cle(r));
+      if (brut.favori === true) st.favs.add(cle(r));
       delete r.favori;
       parUrl.set(k, r);
       recues.add(r);
@@ -415,7 +443,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const MAX_JSON = 25 * 1024 * 1024;
   const mo = n => (n / 1024 / 1024).toFixed(1).replace(".", ",");
   async function lireFichiers(files) {
-    let ajout = 0, cumul = 0;
+    let ajout = 0, ignorees = 0, cumul = 0;
     for (const f of files) {
       cumul += f.size;
       if (f.size > MAX_JSON || cumul > MAX_JSON) {
@@ -424,10 +452,13 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
         cumul -= f.size;
         continue;
       }
-      try { ajout += importer(JSON.parse(await f.text())); }
-      catch (e) { alert(`Fichier invalide : ${f.name}\n${e.message}`); }
+      try {
+        ajout += importer(JSON.parse(await f.text()));
+        ignorees += importer.ignorees;
+      } catch (e) { alert(`Fichier invalide : ${f.name}\n${e.message}`); }
     }
     if (ajout) toast(`${pluriel(ajout, "recette")} ajoutée(s)`);
+    if (ignorees) toast(`${pluriel(ignorees, "entrée")} ignorée(s) : ce ne sont pas des recettes (nom manquant ou format invalide)`, 6000);
   }
 
   // ---------- Export JSON ----------
@@ -533,7 +564,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   function renderChips() {
     for (const k of ["avec", "sans"]) {
       $(k + "Chips").innerHTML = st[k].map((x, j) =>
-        `<span class="chip ${k}" data-k="${k}" data-j="${j}">${esc(x)}</span>`).join("");
+        `<button type="button" class="chip ${k}" data-k="${k}" data-j="${j}" aria-label="Retirer le filtre ${esc(x)}">${esc(x)}</button>`).join("");
     }
   }
 
@@ -750,6 +781,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 
   // ---------- Événements ----------
   // Copie de la liste : `value = ""` la vide, ce qui ne laissait lire que le premier fichier
+  $("btnCharger").addEventListener("click", () => $("file").click());
   $("file").addEventListener("change", e => { lireFichiers([...e.target.files]); e.target.value = ""; });
 
   document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("drop"); });
@@ -782,6 +814,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     $(k + "Chips").addEventListener("click", e => {
       const c = e.target.closest(".chip"); if (!c) return;
       st[c.dataset.k].splice(+c.dataset.j, 1); renderChips(); filtreChange();
+      $(c.dataset.k + "In").focus();                 // le bouton retiré disparaît : le focus clavier revient au champ
     });
   }
 

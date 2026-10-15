@@ -8,6 +8,18 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Corrigé
+- JSON importé, base du navigateur ou du serveur : chaque recette est **validée et normalisée** avant de toucher à l'état de la page
+  (nom en texte obligatoire, listes d'ingrédients/étapes en tableaux de textes bornés, nombres lus, champs internes `_…` écartés). Les entrées
+  inutilisables sont ignorées et signalées (« N entrée(s) ignorée(s) ») au lieu de faire planter la page ; un stockage navigateur corrompu
+  ne la bloque plus.
+- Statut du serveur : contraste du texte vert relevé (4,4 → 5,7 : seuil WCAG AA 4,5).
+
+### Modifié
+- Accessibilité : « 📂 Charger JSON » est un vrai bouton (atteignable au clavier) ; les étiquettes de filtre « avec / sans » sont des boutons
+  (Entrée pour les retirer, le focus revient au champ) ; les messages (toasts, état du serveur, journal d'import) sont annoncés par les lecteurs
+  d'écran (`role="status"` / `role="log"`) ; les champs de la fenêtre d'import ont un nom accessible.
+
 ## [1.5.1] - 2026-10-15
 
 ### Ajouté
