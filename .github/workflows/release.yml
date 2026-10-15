@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  actions: read                # lire le résultat de la CI sur le commit publié
 
 jobs:
   release:
@@ -25,6 +26,33 @@ jobs:
             echo "::error::Le tag $GITHUB_REF_NAME ne correspond pas à VERSION = $VERSION (serveur_recettes.py)"
             exit 1
           fi
+      - name: CI verte sur ce commit (navigateurs, Windows, Python 3.9/3.13)
+        # La release ne part que si la CI complète (ci.yml) a réussi sur le commit du tag ; elle attend la fin d'une CI en cours.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sans_ci=0
+          for i in $(seq 1 60); do                                   # jusqu'à ~30 minutes
+            etats=$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" --limit 20 \
+                      --json status,conclusion --jq '.[] | "\(.status):\(.conclusion)"')
+            echo "CI sur $GITHUB_SHA : ${etats:-aucune exécution}" | tr '\n' ' '; echo
+            if echo "$etats" | grep -q '^completed:success$'; then echo "CI verte."; exit 0; fi
+            if [ -z "$etats" ]; then
+              sans_ci=$((sans_ci + 1))
+              if [ "$sans_ci" -ge 6 ]; then
+                echo "::error::Aucune exécution de la CI sur le commit $GITHUB_SHA. Le tag doit être posé sur un commit de main dont la CI a tourné."
+                exit 1
+              fi
+            elif ! echo "$etats" | grep -qv '^completed:'; then
+              echo "::error::La CI a échoué sur le commit $GITHUB_SHA : pas de release. Corrige, puis relance ce workflow."
+              exit 1
+            fi
+            sleep 30
+          done
+          echo "::error::La CI n'est pas terminée après 30 minutes."
+          exit 1
+      - name: Dépendance facultative des tests (extraction de PDF)
+        run: python -m pip install pdfplumber
       - name: Tests hors ligne
         run: python -m unittest discover -s tests
       - name: Notes de version (CHANGELOG.md)

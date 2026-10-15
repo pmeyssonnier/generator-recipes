@@ -33,7 +33,7 @@ BASE = "https://www.marmiton.org"
 PAUSE = 1.5  # secondes minimum entre deux requêtes sortantes
 # Le serveur s'identifie (au lieu d'imiter un navigateur) et applique les règles du robots.txt
 # visant ce nom. Si un site refuse cet identifiant : RECETTES_USER_AGENT="Mozilla/5.0 …"
-VERSION = "1.6.1"       # version de l'application (SemVer) ; voir CHANGELOG.md. Même valeur dans generateur-recettes.html
+VERSION = "1.6.2"       # version de l'application (SemVer) ; voir CHANGELOG.md. Même valeur dans generateur-recettes.html
 API_VERSION = 2          # 2 : l'import se fait en POST (X-Recettes) ; l'interface s'adapte aux serveurs plus anciens
 ROBOTS_NOM = "RecettesPerso"
 USER_AGENT = (os.environ.get("RECETTES_USER_AGENT", "").strip() or
@@ -74,7 +74,7 @@ _file_lock = threading.Lock()
 _last = [0.0]
 _cache = collections.OrderedDict()      # url -> texte de la page (le plus récemment utilisé en dernier)
 MAX_CACHE = 200          # pages gardées en mémoire
-MAX_CACHE_OCTETS = 40 * 1024 * 1024      # ... et au plus ~40 Mo de texte au total
+MAX_CACHE_OCTETS = 40 * 1024 * 1024      # ... et au plus 40 Mo (octets UTF-8) au total
 
 
 # ---------------- Page HTML ----------------
@@ -202,11 +202,18 @@ def verifier_page(url, txt):
                                "réessaie dans quelques minutes")
 
 
+def _octets(txt):
+    """Taille réelle en octets (UTF-8) : « é » en pèse 2, un caractère CJK 3."""
+    return len(txt.encode("utf-8", errors="replace"))
+
+
 def _cache_ajouter(url, txt):
-    """Cache LRU borné en nombre de pages ET en taille totale (somme recalculée : 200 entrées au plus)."""
+    """Cache LRU borné en nombre de pages ET en octets. Une page seule plus grosse que la limite n'est pas gardée."""
     _cache.pop(url, None)
+    if _octets(txt) > MAX_CACHE_OCTETS:
+        return
     _cache[url] = txt
-    while len(_cache) > 1 and (len(_cache) > MAX_CACHE or sum(map(len, _cache.values())) > MAX_CACHE_OCTETS):
+    while len(_cache) > MAX_CACHE or sum(map(_octets, _cache.values())) > MAX_CACHE_OCTETS:
         _cache.popitem(last=False)
 
 
@@ -504,10 +511,12 @@ def lire_pdf(nom, personnes=2):
                 resultat = pdf.convertir(chemin, personnes)
             except pdf.PdfIndisponible as e:
                 raise PdfIndisponible(str(e)) from None
+            taille = _octets(json.dumps(resultat, default=str, ensure_ascii=False))
+            if taille > MAX_CACHE_PDF_OCTETS:                  # trop gros pour rester en mémoire : rendu, pas gardé
+                return resultat
             _cache_pdf[cle] = resultat
-            _cache_pdf_taille[cle] = len(json.dumps(resultat, default=str, ensure_ascii=False))
-            while len(_cache_pdf) > 1 and (len(_cache_pdf) > MAX_CACHE_PDF
-                                           or sum(_cache_pdf_taille.values()) > MAX_CACHE_PDF_OCTETS):
+            _cache_pdf_taille[cle] = taille
+            while len(_cache_pdf) > MAX_CACHE_PDF or sum(_cache_pdf_taille.values()) > MAX_CACHE_PDF_OCTETS:
                 ancienne = next(iter(_cache_pdf))              # la moins récemment utilisée
                 del _cache_pdf[ancienne]
                 del _cache_pdf_taille[ancienne]
@@ -1025,7 +1034,7 @@ def mettre_a_jour(version=""):
         print(f"Mise à jour refusée : {e}. Rien n'a été modifié.")
         return 1
     chemin = lambda nom, suffixe="": os.path.join(DIR, nom + suffixe)  # noqa: E731
-    sauvegardes, remplaces = {}, []
+    sauvegardes, remplaces, irrecuperables = {}, [], []
     try:
         for nom, contenu in nouveaux.items():
             with open(chemin(nom, ".tmp"), "wb") as f:
@@ -1038,19 +1047,30 @@ def mettre_a_jour(version=""):
             os.replace(chemin(nom, ".tmp"), chemin(nom))
             remplaces.append(nom)
     except OSError as e:
-        for nom in remplaces:                                        # retour à l'état d'avant
+        for nom in remplaces:                                        # retour à l'état d'avant, fichier par fichier
             try:
                 if nom in sauvegardes:
                     os.replace(sauvegardes[nom], chemin(nom))
                 else:
                     os.remove(chemin(nom))
-            except OSError:
-                pass
-        print(f"Mise à jour interrompue ({e}) : les fichiers d'origine ont été restaurés.")
+            except OSError as e2:
+                irrecuperables.append((nom, e2))
+        if irrecuperables:                                           # on ne prétend rien : les sauvegardes restent sur place
+            print(f"Mise à jour interrompue ({e}) ET restauration incomplète.")
+            for nom, e2 in irrecuperables:
+                print(f"  ⚠ {nom} n'a pas pu être restauré ({e2}). "
+                      + (f"Copie d'origine conservée : {chemin(nom, '.bak')}" if nom in sauvegardes
+                         else "Il n'existait pas avant : supprime-le à la main."))
+            print("  Renomme les fichiers .bak ci-dessus (retire « .bak ») pour revenir à la version précédente.")
+        else:
+            print(f"Mise à jour interrompue ({e}) : les fichiers d'origine ont été restaurés.")
         return 1
     finally:
+        gardes = {nom for nom, _ in irrecuperables}
         for nom in nouveaux:
             for suffixe in (".tmp", ".bak"):
+                if suffixe == ".bak" and nom in gardes:
+                    continue                                         # seule copie de l'ancien fichier : on la garde
                 try:
                     os.remove(chemin(nom, suffixe))
                 except OSError:

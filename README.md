@@ -293,7 +293,9 @@ version sont dans [CHANGELOG.md](CHANGELOG.md) ; les releases sont sur la page *
    ```
 
 3. GitHub Actions (`.github/workflows/release.yml`) vérifie que le tag correspond à `VERSION`,
-   lance les tests puis crée la release avec les notes de `CHANGELOG.md`.
+   attend que la CI complète soit verte sur ce commit (le tag doit donc être posé sur un commit de `main`
+   dont la CI a tourné ; en cas d'échec, corriger puis relancer le workflow), lance les tests puis crée
+   la release avec les notes de `CHANGELOG.md`.
    Si la release existe déjà (créée à la main via *Draft a new release* sur le site, qui crée aussi
    le tag), le workflow la laisse telle quelle et ne signale pas d'erreur.
 

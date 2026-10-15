@@ -8,6 +8,45 @@ RACCOURCIS="${RECETTES_RACCOURCIS:-$HOME/.shortcuts}"
 
 attendre() { read -r -p "Entrée pour fermer" || true; }
 
+# Remplacement « tout ou rien » des fichiers $1.tmp : sauvegarde .bak de chacun, remplacement un par un, et au premier
+# échec retour à l'état d'avant. Une sauvegarde qui n'a pas pu être remise en place est gardée (.bak) et signalée.
+installer_fichiers() {
+  local f faits="" restes=""
+  for f in "$@"; do
+    if [ -f "$f" ] && ! cp -p "$f" "$f.bak"; then
+      echo "Sauvegarde de $f impossible : rien n'a été modifié."
+      for f in "$@"; do rm -f "$f.tmp" "$f.bak"; done
+      return 1
+    fi
+  done
+  for f in "$@"; do
+    if mv "$f.tmp" "$f"; then
+      faits="$faits $f"
+    else
+      echo "Remplacement de $f impossible : retour à la version précédente…"
+      for f in $faits; do
+        if [ -f "$f.bak" ]; then
+          mv "$f.bak" "$f" || restes="$restes $f"
+        else
+          rm -f "$f" || restes="$restes $f"
+        fi
+      done
+      for f in "$@"; do rm -f "$f.tmp"; done
+      if [ -n "$restes" ]; then
+        echo "⚠ Restauration incomplète pour :$restes"
+        echo "  Les copies d'origine sont conservées (fichiers .bak) : renomme-les en retirant « .bak »."
+        for f in "$@"; do case " $restes " in *" $f "*) ;; *) rm -f "$f.bak";; esac; done
+      else
+        echo "Les fichiers d'origine ont été restaurés."
+        for f in "$@"; do rm -f "$f.bak"; done
+      fi
+      return 1
+    fi
+  done
+  for f in "$@"; do rm -f "$f.bak"; done
+  return 0
+}
+
 mettre_a_jour() {
   local VERSION="${RECETTES_VERSION:-}" f
   cd "$DOSSIER" || { echo "Dossier introuvable : $DOSSIER"; attendre; return 1; }
@@ -39,18 +78,19 @@ mettre_a_jour() {
   for f in serveur_recettes.py generateur-recettes.html; do
     if ! curl -fsSL "$BASE/$f" -o "$f.tmp"; then
       echo "Échec du téléchargement de $f ($VERSION) : rien n'a été modifié."
-      rm -f serveur_recettes.py.tmp generateur-recettes.html.tmp
+      rm -f serveur_recettes.py.tmp generateur-recettes.html.tmp pdf_recettes.py.tmp
       attendre; return 1
     fi
   done
-  mv serveur_recettes.py.tmp serveur_recettes.py && mv generateur-recettes.html.tmp generateur-recettes.html
   # Extraction de PDF (source eFarmz) : facultative, absente des versions plus anciennes
+  local FICHIERS="serveur_recettes.py generateur-recettes.html"
   if curl -fsSL "$BASE/pdf_recettes.py" -o pdf_recettes.py.tmp; then
-    mv pdf_recettes.py.tmp pdf_recettes.py
+    FICHIERS="$FICHIERS pdf_recettes.py"
   else
     rm -f pdf_recettes.py.tmp
     echo "pdf_recettes.py absent de la version $VERSION : la source eFarmz (PDF) restera indisponible."
   fi
+  installer_fichiers $FICHIERS || { attendre; return 1; }
   echo "Mise à jour terminée :"; python serveur_recettes.py --version
   mettre_a_jour_raccourcis "$BASE"
   attendre

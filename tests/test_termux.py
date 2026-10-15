@@ -214,6 +214,41 @@ class ScriptsTermux(unittest.TestCase):
             self.assertEqual(self.lire(self.dossier, nom), "ANCIEN", f"{nom} modifié malgré l'échec")
         self.assertEqual(sorted(os.listdir(self.dossier)), ["generateur-recettes.html", "serveur_recettes.py"])
 
+    def faux_mv(self, echec_sur, aussi_les_bak=False):
+        """mv qui échoue quand la destination est `echec_sur` (et, si demandé, quand la source est une sauvegarde .bak)."""
+        reel = shutil.which("mv")
+        ecrire(os.path.join(self.bin, "mv"),
+               '#!/bin/bash\nfor dernier; do :; done\n'
+               f'if [ "$dernier" = "{echec_sur}" ]; then exit 1; fi\n'
+               + ('case "$1" in *.bak) exit 1;; esac\n' if aussi_les_bak else "")
+               + f'exec "{reel}" "$@"\n')
+
+    def test_maj_panne_au_deuxieme_remplacement_restaure_tout(self):
+        """Transactionnelle : si le 2e fichier ne peut pas être remplacé, le 1er revient à l'ancienne version."""
+        ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
+        for nom in ("serveur_recettes.py", "generateur-recettes.html"):
+            ecrire(os.path.join(self.dossier, nom), "ANCIEN", executable=False)
+        self.faux_mv("generateur-recettes.html")
+        r = self.lancer("Recettes-maj", sources=self.sources_release(), RECETTES_DOSSIER=self.dossier)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("Les fichiers d'origine ont été restaurés", r.stdout)
+        for nom in ("serveur_recettes.py", "generateur-recettes.html"):
+            self.assertEqual(self.lire(self.dossier, nom), "ANCIEN", nom)
+        self.assertEqual(sorted(os.listdir(self.dossier)), ["generateur-recettes.html", "serveur_recettes.py"],
+                         "ni .tmp ni .bak, et pdf_recettes.py (nouveau) n'est pas resté")
+
+    def test_maj_restauration_impossible_gardee_et_signalee(self):
+        ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
+        for nom in ("serveur_recettes.py", "generateur-recettes.html"):
+            ecrire(os.path.join(self.dossier, nom), "ANCIEN", executable=False)
+        self.faux_mv("generateur-recettes.html", aussi_les_bak=True)
+        r = self.lancer("Recettes-maj", sources=self.sources_release(), RECETTES_DOSSIER=self.dossier)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Restauration incomplète pour : serveur_recettes.py", r.stdout)
+        self.assertNotIn("ont été restaurés", r.stdout)
+        self.assertEqual(self.lire(self.dossier, "serveur_recettes.py.bak"), "ANCIEN")       # seule copie : conservée
+        self.assertEqual(self.lire(self.dossier, "generateur-recettes.html"), "ANCIEN")
+
     def test_maj_module_pdf_facultatif(self):
         """Une version sans pdf_recettes.py (ex. v1.0.0) se met quand même à jour."""
         ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
