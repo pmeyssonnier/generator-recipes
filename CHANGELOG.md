@@ -8,6 +8,24 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.6.0] - 2026-10-15
+
+### Ajouté
+- `outils/changer_version.py X.Y.Z` : change la version dans les trois fichiers d'un coup (et prépare la section du journal).
+- Port du serveur local personnalisable quand la page est ouverte hors serveur (GitHub Pages, fichier) : lien `…/generateur-recettes.html?port=8766`, retenu ensuite. La politique de sécurité autorise `localhost` et `127.0.0.1` sur tout port.
+- Filtres regroupés en **accordéons** (Ingrédients, Temps et note, Source et catégorie, Tri et favoris).
+- **Tiroir de filtres sur téléphone** : un bouton « ☰ Filtres » (avec la pastille du nombre de filtres actifs) ouvre un panneau qui glisse depuis la gauche, avec un voile derrière ; il se ferme par ✕, « Voir les recettes », un clic sur le voile ou Échap. Sur grand écran, les filtres restent dans la colonne de gauche.
+
+### Modifié
+- Mobile : l'en-tête ne reste plus collé en haut de l'écran, boutons plus compacts, « Surprends-moi » et « Réinitialiser » sur une seule ligne.
+- Les pages mises en cache (40 Mo au plus) et les extractions de PDF (60 Mo au plus) sont bornées en taille ; la plus ancienne est évincée, plus de vidage complet.
+- CI : les étapes Windows/PyInstaller communes à `ci.yml` et `release.yml` sont factorisées dans `.github/actions/exe-windows`.
+
+### Corrigé
+- Une page d'erreur renvoyée par un site avec un code 200 (« Site Unavailable », « Access Denied », anti-robot…) est refusée avec un message clair (« réessaie dans quelques minutes ») et n'est plus gardée en cache.
+- La fenêtre d'import n'accumule plus les avertissements « serveur injoignable » à chaque ouverture.
+- Tests : chargement d'un JSON au clavier.
+
 ## [1.5.2] - 2026-10-15
 
 ### Corrigé
@@ -183,7 +201,8 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.5.2...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.0
 [1.5.2]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.5.2
 [1.5.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.5.1
 [1.5.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.5.0

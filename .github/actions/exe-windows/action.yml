@@ -1,0 +1,19 @@
+name: Construire et essayer recettes.exe
+description: >
+  Construit l'exécutable Windows avec PyInstaller puis le lance une fois pour vérifier qu'il démarre
+  et lit un PDF. Étapes communes à ci.yml et release.yml (à utiliser après actions/checkout, sur windows-latest).
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+    - name: Construire l'exécutable (PyInstaller)
+      shell: pwsh
+      run: |
+        python -m pip install pyinstaller pdfplumber
+        python outils/construire_exe.py .
+    - name: Essai de l'exécutable
+      shell: pwsh
+      run: python outils/essai_exe.py (Get-ChildItem recettes-v*.exe).FullName

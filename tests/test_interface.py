@@ -11,6 +11,7 @@ d'une page de sélection (lister_page) sont simulées : aucun accès réseau ext
 """
 import json
 import os
+import pathlib
 import socket
 import re
 import shutil
@@ -704,6 +705,75 @@ class Interface(unittest.TestCase):
         base = self.page.evaluate(f"JSON.parse(localStorage.getItem('{KEY}')).recettes")      # classement enregistré
         self.assertEqual([r["categorie"] for r in base if r["nom"] == "Soupe de potiron"], ["Entrée"])
 
+    def test_port_personnalise_hors_serveur(self):
+        # Page ouverte en fichier : ?port=8766 désigne le serveur local, et le choix est retenu.
+        vus = []
+        self.page.on("request", lambda r: vus.append(r.url))
+        self.page.goto(pathlib.Path(s.DIR_PAGE, "generateur-recettes.html").as_uri() + "?port=8766")
+        self.page.wait_for_function("() => document.getElementById('srvStatus')", polling=100)
+        self.page.wait_for_timeout(800)
+        self.assertTrue(any(u.startswith("http://localhost:8766/") for u in vus), vus)
+        self.assertFalse(any(u.startswith("http://localhost:8765/") for u in vus), vus)
+        stockage = self.page.evaluate("(() => { try { return localStorage.getItem('recettes.port') === '8766'; }"
+                                      " catch { return false; } })()")
+        if stockage:                                    # (certains moteurs refusent le stockage des fichiers)
+            vus.clear()
+            self.page.goto(pathlib.Path(s.DIR_PAGE, "generateur-recettes.html").as_uri())     # sans paramètre : retenu
+            self.page.wait_for_timeout(800)
+            self.assertTrue(any(u.startswith("http://localhost:8766/") for u in vus), vus)
+        self.erreurs.clear()           # serveur absent sur ce port : les refus de connexion sont attendus
+
+    def test_journal_d_import_non_cumule(self):
+        self.ouvrir()
+        self.ouvrir_import()
+        self.page.evaluate("document.getElementById('impLog').textContent = 'ancien message\\n'")
+        self.page.keyboard.press("Escape")
+        self.ouvrir_import()
+        self.assertNotIn("ancien message", self.page.inner_text("#impLog"))
+
+    def test_filtres_en_accordeon(self):
+        # Grand écran : groupes ouverts ; téléphone : repliés, dépliables au clic et au clavier.
+        self.ouvrir()
+        self.assertEqual(self.page.locator("details.fgrp[open]").count(), 4)
+        self.assertTrue(self.page.is_visible("#cat"))
+        self.page.click("details.fgrp:has(#cat) > summary")
+        self.assertFalse(self.page.is_visible("#cat"))
+        self.page.click("details.fgrp:has(#cat) > summary")
+        self.assertTrue(self.page.is_visible("#cat"))
+        self.assertFalse(self.page.is_visible("#btnFiltres"))            # grand écran : pas de ☰
+        self.assertFalse(self.page.is_visible("#btnFermerFiltres"))
+
+    def test_filtres_en_tiroir_sur_telephone(self):
+        self.page.set_viewport_size({"width": 400, "height": 800})
+        self.ouvrir()
+        self.charger([recette(1, categorie="Plat", note=4.8), recette(2, categorie="Dessert", note=3.2)])
+        self.assertTrue(self.page.is_visible("#btnFiltres"))
+        self.assertFalse(self.page.is_visible("#cat"), "le tiroir est fermé au départ")
+        self.assertEqual(self.page.get_attribute("#btnFiltres", "aria-expanded"), "false")
+        self.page.click("#btnFiltres")
+        self.page.wait_for_selector("#cat", state="visible")
+        self.assertEqual(self.page.get_attribute("#btnFiltres", "aria-expanded"), "true")
+        self.assertEqual(self.page.evaluate("document.activeElement.id"), "btnFermerFiltres")
+        self.page.select_option("#cat", "Dessert")
+        self.assertEqual(self.noms_affiches(), ["Recette 2"])            # le filtre agit pendant que le tiroir est ouvert
+        self.page.wait_for_function("() => document.getElementById('nbFiltres').textContent === '1'", polling=100)
+        self.page.click("#btnVoirRecettes")                             # fermeture par le bouton du bas
+        self.page.wait_for_selector("#cat", state="hidden")
+        self.assertEqual(self.page.evaluate("document.activeElement.id"), "btnFiltres")
+        self.page.click("#btnFiltres")
+        self.page.keyboard.press("Escape")                              # Échap
+        self.page.wait_for_selector("#cat", state="hidden")
+        self.page.click("#btnFiltres")
+        self.page.click("#voile", position={"x": 380, "y": 400})        # clic sur le voile
+        self.page.wait_for_selector("#cat", state="hidden")
+        self.page.click("#btnFiltres")
+        self.page.click("#btnReset")
+        self.page.wait_for_selector("#nbFiltres", state="hidden")
+        self.page.click("#btnFermerFiltres")                            # ✕
+        self.page.wait_for_selector("#cat", state="hidden")
+        self.page.set_viewport_size({"width": 1200, "height": 800})     # retour grand écran : colonne visible
+        self.assertTrue(self.page.is_visible("#cat"))
+
     def test_filtres_tri_et_reinitialisation(self):
         self.ouvrir()
         self.charger([recette(1, note=4.9, total_min=30, categorie="Plat"),
@@ -766,6 +836,16 @@ class Interface(unittest.TestCase):
         self.ouvrir()
         with self.page.expect_file_chooser() as choix:
             self.page.click("#btnCharger")                              # le vrai bouton 📂
+        choix.value.set_files({"name": "a.json", "mimeType": "application/json",
+                               "buffer": json.dumps([recette(1)]).encode()})
+        self.page.wait_for_selector(".card")
+        self.assertIn("1 recette ajoutée(s)", self.alertes_toast())
+
+    def test_charger_json_au_clavier(self):
+        self.ouvrir()
+        self.page.focus("#btnCharger")
+        with self.page.expect_file_chooser() as choix:
+            self.page.keyboard.press("Enter")                           # sans souris
         choix.value.set_files({"name": "a.json", "mimeType": "application/json",
                                "buffer": json.dumps([recette(1)]).encode()})
         self.page.wait_for_selector(".card")

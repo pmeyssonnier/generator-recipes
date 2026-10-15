@@ -279,10 +279,10 @@ version sont dans [CHANGELOG.md](CHANGELOG.md) ; les releases sont sur la page *
 
 **Publier une version** (par exemple 1.1.0) :
 
-1. Dans une pull request : changer `VERSION` dans `serveur_recettes.py` **et** dans
-   `generateur-recettes.html` (deux endroits : `const VERSION` et le `<small class="version">`),
-   puis ajouter dans `CHANGELOG.md` la section `## [1.1.0] - AAAA-MM-JJ` (en renommant le contenu
-   de `[Non publié]`) et le lien en bas de fichier. Les tests (`tests/test_version.py`) vérifient
+1. Dans une pull request : lancer `python outils/changer_version.py 1.1.0`. La commande met à jour
+   `VERSION` dans `serveur_recettes.py`, la constante et l'en-tête de `generateur-recettes.html`,
+   et transforme `[Non publié]` en `## [1.1.0] - AAAA-MM-JJ` dans `CHANGELOG.md` (avec les liens du
+   bas). Il reste à compléter cette section, puis les tests (`tests/test_version.py`) vérifient
    que tout est cohérent.
 2. Une fois la PR fusionnée, créer le tag sur `main` :
 
