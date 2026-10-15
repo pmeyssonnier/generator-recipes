@@ -352,8 +352,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
   const nettoyerNom = s => String(s || "").replace(/ /g, " ")
     .replace(/\s*:\s*la meilleure recette\s*$/i, "").trim();
-  // Clé des favoris / panier : l'URL, ou le nom pour une recette sans URL
-  const cle = r => r.url || ("nom:" + nettoyerNom(r.nom));
+  // Identité d'une recette (favoris, panier, ré-import, suppression) : son URL ; sans URL, la page de PDF d'où elle vient
+  // (corriger le titre d'une fiche ne perd ni ses favoris ni son panier, et la ré-importer la remplace) ; sinon son nom.
+  // Même règle que le serveur (cle_recette).
+  const estPdf = r => /\.pdf p\.\d+$/i.test(r.source || "");
+  const cle = r => r.url || (estPdf(r) ? "pdf:" + r.source : "nom:" + nettoyerNom(r.nom));
   const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
   function indexer(r) {
@@ -382,9 +385,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
 
   // ---------- Import JSON ----------
-  // Identité d'une recette : son URL ; sans URL, la page de PDF d'où elle vient (réimporter la même page la
-  // remplace même si son titre a changé) ; sinon son nom. Même règle que le serveur (cle_recette).
-  const cleImport = r => r.url || (/\.pdf p\.\d+$/i.test(r.source || "") ? "pdf:" + r.source : r.nom);
+  const cleImport = cle;
   // Seules les recettes reçues sont (ré)indexées. Avec differe = true, l'enregistrement
   // et l'affichage sont repoussés : l'appelant termine par valider() (import en lot).
   function importer(data, { differe = false } = {}) {
@@ -937,6 +938,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // ---------- Init ----------
   load();
   recettes = recettes.map(indexer);
+  // Favoris et courses des fiches de PDF enregistrés avec l'ancienne clé (le nom) : repris sous la clé de la page de PDF
+  for (const r of recettes.filter(estPdf)) {
+    const ancien = "nom:" + nettoyerNom(r.nom);
+    for (const ens of [st.favs, st.panier]) if (ens.has(ancien)) { ens.delete(ancien); ens.add(cle(r)); }
+  }
   save();                                   // réécrit les noms nettoyés
   remplirCategories(); renderChips(); render();
 

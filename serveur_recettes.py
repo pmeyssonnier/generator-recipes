@@ -429,6 +429,10 @@ _cache_pdf = {}                    # (fichier, taille, date, personnes) -> (rece
 _verrou_pdf = threading.Lock()
 
 
+class RessourceIntrouvable(ValueError):
+    """PDF ou page de PDF absent : réponse HTTP 404."""
+
+
 class PdfIndisponible(Exception):
     """Extraction PDF impossible : pdfplumber (ou pdf_recettes.py) manque."""
 
@@ -459,7 +463,7 @@ def fichiers_pdf():
 def lire_pdf(nom, personnes=2):
     """(recettes, rapport) d'un PDF du dossier eFarmz/ ; résultat gardé en mémoire tant que le fichier ne change pas."""
     if nom not in fichiers_pdf():                     # uniquement un nom présent dans le dossier : pas de chemin
-        raise ValueError(f"PDF introuvable dans le dossier {os.path.basename(DOSSIER_PDF)}/ : {nom[:80]}")
+        raise RessourceIntrouvable(f"PDF introuvable dans le dossier {os.path.basename(DOSSIER_PDF)}/ : {nom[:80]}")
     chemin = os.path.join(DOSSIER_PDF, nom)
     st = os.stat(chemin)
     if st.st_size > MAX_PDF_OCTETS:
@@ -520,13 +524,13 @@ def importer_pdf(ident, personnes=2):
     """Recette désignée par « efarmz:fichier.pdf#page » (ne touche pas la base : l'appelant l'ajoute)."""
     nom, _, page = ident[len(PREFIXE_PDF):].rpartition("#")
     if not nom or not page.isdigit():
-        raise ValueError("Identifiant de recette PDF invalide")
+        raise ParametreInvalide("Identifiant de recette PDF invalide")
     _module_pdf()
     recettes, rapport = lire_pdf(nom, personnes)
     for numero, rec, _alertes in rapport:
         if numero == int(page):
             return recette_pdf(nom, numero, rec)
-    raise ValueError(f"Pas de recette à la page {page} de {nom}")
+    raise RessourceIntrouvable(f"Pas de recette à la page {page} de {nom}")
 
 
 def search_recipes(q, n=10, source="marmiton"):
@@ -867,6 +871,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"erreur": str(e)}, 403)
         except PdfIndisponible as e:
             self.send_json({"erreur": str(e)}, 503)
+        except RessourceIntrouvable as e:
+            self.send_json({"erreur": str(e)}, 404)
         except ReponseTropGrosse as e:
             self.send_json({"erreur": str(e)}, 502)
         except HTTPError as e:
@@ -911,9 +917,34 @@ FICHIERS_MAJ = ("serveur_recettes.py", "generateur-recettes.html")      # obliga
 FICHIERS_MAJ_FACULTATIFS = ("pdf_recettes.py",)                          # absents des anciennes versions
 
 
+def _numero(version):
+    """(majeur, mineur, correctif) d'un « v1.2.3 » ou « 1.2.3 », sinon None (« main »…)."""
+    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", str(version))
+    return tuple(int(x) for x in m.groups()) if m else None
+
+
+def _valider_maj(nom, contenu, version):
+    """Refuse un fichier téléchargé inutilisable avant de toucher à quoi que ce soit (ValueError)."""
+    if nom.endswith(".py"):
+        try:
+            compile(contenu, nom, "exec")
+        except (SyntaxError, ValueError) as e:
+            raise ValueError(f"{nom} téléchargé est invalide ({e})") from None
+    if nom == "serveur_recettes.py":
+        m = re.search(rb'^VERSION = "([^"]+)"', contenu, re.M)
+        if not m:
+            raise ValueError("serveur_recettes.py téléchargé sans numéro de version")
+        if _numero(version) and m.group(1).decode() != version.lstrip("v"):
+            raise ValueError(f"serveur_recettes.py téléchargé est en version {m.group(1).decode()}, pas {version}")
+    if nom.endswith(".html") and b"<html" not in contenu[:2000].lower():
+        raise ValueError(f"{nom} téléchargé n'est pas une page HTML")
+
+
 def mettre_a_jour(version=""):
     """Remplace le serveur et la page par ceux de la dernière release (ou de la version demandée).
-    Tout ou rien : un téléchargement qui échoue ne modifie rien. La base recettes.json n'est jamais touchée.
+    Sans version demandée, une release plus ancienne que la version installée est ignorée (pas de retour en arrière).
+    Tout ou rien : fichiers téléchargés et vérifiés d'abord, puis remplacés avec sauvegarde ; en cas d'échec en cours de route,
+    les anciens fichiers sont restaurés. La base recettes.json n'est jamais touchée.
     RECETTES_API / RECETTES_RAW remplacent les adresses de GitHub (tests). Renvoie le code de sortie."""
     if EXECUTABLE:
         print("Mise à jour impossible depuis recettes.exe : télécharge la nouvelle version sur "
@@ -922,6 +953,7 @@ def mettre_a_jour(version=""):
     api = os.environ.get("RECETTES_API", f"https://api.github.com/repos/{DEPOT}").rstrip("/")
     brut = os.environ.get("RECETTES_RAW", f"https://raw.githubusercontent.com/{DEPOT}").rstrip("/")
     version = version or os.environ.get("RECETTES_VERSION", "")
+    demandee = bool(version)
 
     def lire(url):
         with build_opener().open(Request(url, headers={"User-Agent": f"{ROBOTS_NOM}/{VERSION}"}), timeout=30) as r:
@@ -933,9 +965,15 @@ def mettre_a_jour(version=""):
         if not re.fullmatch(r"[A-Za-z0-9._-]+", version or ""):
             print(f"Version introuvable ou invalide : {version!r}. Rien n'a été modifié.")
             return 1
-        if version.lstrip("v") == VERSION:
-            print(f"Déjà à jour : version {VERSION}.")
-            return 0
+        cible, courant = _numero(version), _numero(VERSION)
+        if cible and courant:
+            if cible == courant:
+                print(f"Déjà à jour : version {VERSION}.")
+                return 0
+            if cible < courant and not demandee:
+                print(f"Déjà à jour : la version installée ({VERSION}) est plus récente que la dernière release publiée "
+                      f"({version.lstrip('v')}).")
+                return 0
         print(f"Mise à jour vers {version} (actuellement {VERSION})…")
         nouveaux = {nom: lire(f"{brut}/{version}/{nom}") for nom in FICHIERS_MAJ}
     except (HTTPError, URLError, OSError, ValueError) as e:
@@ -946,11 +984,43 @@ def mettre_a_jour(version=""):
             nouveaux[nom] = lire(f"{brut}/{version}/{nom}")
         except (HTTPError, URLError, OSError):
             print(f"{nom} absent de la version {version} : ignoré.")
-    for nom, contenu in nouveaux.items():
-        with open(os.path.join(DIR, nom + ".tmp"), "wb") as f:
-            f.write(contenu)
-    for nom in nouveaux:
-        os.replace(os.path.join(DIR, nom + ".tmp"), os.path.join(DIR, nom))
+    try:
+        for nom, contenu in nouveaux.items():
+            _valider_maj(nom, contenu, version)
+    except ValueError as e:
+        print(f"Mise à jour refusée : {e}. Rien n'a été modifié.")
+        return 1
+    chemin = lambda nom, suffixe="": os.path.join(DIR, nom + suffixe)  # noqa: E731
+    sauvegardes, remplaces = {}, []
+    try:
+        for nom, contenu in nouveaux.items():
+            with open(chemin(nom, ".tmp"), "wb") as f:
+                f.write(contenu)
+        for nom in nouveaux:                                         # sauvegardes, puis remplacements
+            if os.path.exists(chemin(nom)):
+                shutil.copy2(chemin(nom), chemin(nom, ".bak"))
+                sauvegardes[nom] = chemin(nom, ".bak")
+        for nom in nouveaux:
+            os.replace(chemin(nom, ".tmp"), chemin(nom))
+            remplaces.append(nom)
+    except OSError as e:
+        for nom in remplaces:                                        # retour à l'état d'avant
+            try:
+                if nom in sauvegardes:
+                    os.replace(sauvegardes[nom], chemin(nom))
+                else:
+                    os.remove(chemin(nom))
+            except OSError:
+                pass
+        print(f"Mise à jour interrompue ({e}) : les fichiers d'origine ont été restaurés.")
+        return 1
+    finally:
+        for nom in nouveaux:
+            for suffixe in (".tmp", ".bak"):
+                try:
+                    os.remove(chemin(nom, suffixe))
+                except OSError:
+                    pass
     print(f"Mise à jour terminée : {version}.")
     return 0
 

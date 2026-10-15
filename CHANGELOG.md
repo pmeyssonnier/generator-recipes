@@ -8,6 +8,17 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Corrigé
+- Mise à jour (`--maj`, `Recettes-maj` sous Termux) : plus de **retour en arrière** automatique. Si la version installée est plus récente que la
+  dernière release publiée (par exemple installée depuis `main`), rien n'est remplacé ; une version demandée à la main reste possible.
+- Mise à jour réellement « tout ou rien » : les fichiers téléchargés sont vérifiés (Python valide, numéro de version cohérent, page HTML) avant
+  tout remplacement, puis remplacés avec sauvegarde ; en cas de panne au milieu, les fichiers d'origine sont restaurés.
+- Favoris et courses d'une fiche de PDF : suivent la page du PDF (comme le ré-import) et non plus le titre ; ceux enregistrés sous l'ancienne
+  clé sont repris automatiquement. Une seule règle d'identité dans la page.
+- `tester_sources.py` ne plante plus sur la source eFarmz (dossier local) : elle est ignorée.
+- Identifiant de PDF mal formé : HTTP 400 ; PDF ou page absents : HTTP 404 (au lieu de 500).
+- `outils/construire_archive.py` ferme ses fichiers.
+
 ## [1.5.1] - 2026-10-13
 
 ### Ajouté

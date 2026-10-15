@@ -22,7 +22,8 @@ FICHIERS = [                                    # (source, nom dans l'archive, e
 
 
 def version():
-    texte = open(os.path.join(RACINE, "serveur_recettes.py"), encoding="utf-8").read()
+    with open(os.path.join(RACINE, "serveur_recettes.py"), encoding="utf-8") as f:
+        texte = f.read()
     return re.search(r'^VERSION = "([^"]+)"', texte, re.M).group(1)
 
 

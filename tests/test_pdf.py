@@ -119,6 +119,12 @@ class SourceEfarmz(unittest.TestCase):
         self.assertTrue(recettes[0]["image"].startswith("data:image/jpeg"))
         self.assertTrue(recettes[1]["alertes"])                                  # durées incomplètes signalées
 
+    def test_identifiants_pdf_incorrects_donnent_400_ou_404(self):
+        self.assertEqual(self.requete("/api/recipe?url=efarmz%3Av375.pdf", post=True)[0], 400)          # sans page
+        self.assertEqual(self.requete("/api/recipe?url=efarmz%3Av375.pdf%23abc", post=True)[0], 400)    # page non numérique
+        self.assertEqual(self.requete("/api/recipe?url=efarmz%3Ainconnu.pdf%232", post=True)[0], 404)   # PDF absent
+        self.assertEqual(self.requete("/api/recipe?url=efarmz%3Av375.pdf%2399", post=True)[0], 404)     # page sans recette
+
     def test_filtre(self):
         res = self.requete("/api/search?source=efarmz&q=OEUFS")[1]               # sans accent ni majuscule
         self.assertEqual([x["titre"] for x in res if x["url"]], ["Œufs cocotte"])
@@ -162,10 +168,12 @@ class SourceEfarmz(unittest.TestCase):
         self.assertEqual(noms, ["Autre", "Sans page", "Œufs cocotte"])
 
     def test_identifiants_invalides_ou_hors_dossier(self):
-        for ident in ("efarmz:../serveur_recettes.py#1", "efarmz:/etc/passwd#1", "efarmz:v375.pdf", "efarmz:v375.pdf#x",
-                      "efarmz:inconnu.pdf#2", "efarmz:v375.pdf#99", "efarmz:#1"):
+        attendus = {"efarmz:../serveur_recettes.py#1": 404, "efarmz:/etc/passwd#1": 404, "efarmz:inconnu.pdf#2": 404,
+                    "efarmz:v375.pdf#99": 404,                                     # PDF ou page absents : 404
+                    "efarmz:v375.pdf": 400, "efarmz:v375.pdf#x": 400, "efarmz:#1": 400}   # identifiant mal formé : 400
+        for ident, attendu in attendus.items():
             code, rep = self.requete("/api/recipe?url=" + urllib.request.quote(ident, safe=""), post=True)
-            self.assertEqual(code, 500, ident)                                   # message écrit par le serveur
+            self.assertEqual(code, attendu, ident)
             self.assertIn("erreur", rep)
         self.assertEqual(s.lire_base(), [])
 
