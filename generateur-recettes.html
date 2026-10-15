@@ -926,7 +926,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     Object.assign(st, { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", src:"", tri:"note", favOnly:false, surprise:null, visibles:PAGE });
     $("q").value = ""; $("tmax").value = 0; $("tmaxVal").textContent = "illimité";
     $("nmin").value = "0"; $("cat").value = ""; $("src").value = ""; $("tri").value = "note"; $("favOnly").checked = false;
-    renderChips(); render();
+    renderChips(); render(); majPastille();
   });
 
   // Après un re-rendu de la grille, rend le focus clavier au bouton qui vient d'être actionné

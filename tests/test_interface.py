@@ -756,7 +756,7 @@ class Interface(unittest.TestCase):
         self.assertEqual(self.page.evaluate("document.activeElement.id"), "btnFermerFiltres")
         self.page.select_option("#cat", "Dessert")
         self.assertEqual(self.noms_affiches(), ["Recette 2"])            # le filtre agit pendant que le tiroir est ouvert
-        self.assertEqual(self.page.inner_text("#nbFiltres"), "1")
+        self.page.wait_for_function("() => document.getElementById('nbFiltres').textContent === '1'", polling=100)
         self.page.click("#btnVoirRecettes")                             # fermeture par le bouton du bas
         self.page.wait_for_selector("#cat", state="hidden")
         self.assertEqual(self.page.evaluate("document.activeElement.id"), "btnFiltres")
@@ -768,7 +768,7 @@ class Interface(unittest.TestCase):
         self.page.wait_for_selector("#cat", state="hidden")
         self.page.click("#btnFiltres")
         self.page.click("#btnReset")
-        self.assertTrue(self.page.is_hidden("#nbFiltres"))
+        self.page.wait_for_selector("#nbFiltres", state="hidden")
         self.page.click("#btnFermerFiltres")                            # ✕
         self.page.wait_for_selector("#cat", state="hidden")
         self.page.set_viewport_size({"width": 1200, "height": 800})     # retour grand écran : colonne visible
