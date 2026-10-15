@@ -217,6 +217,7 @@ class Interface(unittest.TestCase):
                       {"nom": "Autre 2", "source": "Mamie", "ingredients": ["c"]}])
         self.assertEqual(self.noms_affiches(), ["Autre", "Autre 2", "Filet doublé filet doublé"])
         self.charger([{"nom": "Filet de poisson", "source": pdf, "ingredients": ["a"]}])
+        self.page.locator(".card", has_text="Filet de poisson").wait_for()   # le chargement du fichier est asynchrone
         self.assertEqual(self.noms_affiches(), ["Autre", "Autre 2", "Filet de poisson"])
 
     def test_favoris_et_courses_survivent_au_renommage_d_une_fiche_de_pdf(self):
@@ -227,6 +228,7 @@ class Interface(unittest.TestCase):
         self.page.locator(".card", has_text="Ancien titre").locator("[data-fav]").click()
         self.page.locator(".card", has_text="Ancien titre").locator("[data-pan]").click()
         self.charger([{"nom": "Nouveau titre", "source": pdf, "ingredients": ["a"]}])
+        self.page.locator(".card", has_text="Nouveau titre").wait_for()      # le chargement du fichier est asynchrone
         self.assertEqual(self.noms_affiches(), ["Nouveau titre"])
         donnees = self.page.evaluate(f"JSON.parse(localStorage.getItem('{KEY}'))")
         self.assertEqual((donnees["favs"], donnees["panier"]), ([f"pdf:{pdf}"], [f"pdf:{pdf}"]))
