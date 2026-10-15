@@ -241,6 +241,57 @@ class Interface(unittest.TestCase):
         donnees = self.page.evaluate(f"JSON.parse(localStorage.getItem('{KEY}'))")
         self.assertEqual((donnees["favs"], donnees["panier"]), ([f"pdf:{pdf}"], [f"pdf:{pdf}"]))
 
+    def test_json_mal_forme_ne_casse_pas_la_page(self):
+        """Un JSON valide peut avoir n'importe quelle forme : les entrées inutilisables sont ignorées (et signalées),
+        les autres normalisées ; rien n'est modifié par une entrée invalide."""
+        self.ouvrir()
+        self.charger([{"nom": "Base", "ingredients": ["a"]}])
+        self.charger([None, 5, "texte", [], {"sans": "nom"}, {"nom": 123}, {"nom": "  "},
+                      {"nom": "Soupe", "ingredients": "oignon\n  \ncarotte", "etapes": {"x": 1}, "note": "4,5",
+                       "categorie": ["Entrée", 5], "total_min": "abc", "_ing": "piratage", "__proto__": {"x": 1}},
+                      {"nom": "Gâteau", "ingredients": [1, None, {"a": 1}, "farine"], "image": 42, "url": 7}])
+        self.page.locator(".card", has_text="Gâteau").wait_for()
+        self.assertEqual(self.noms_affiches(), ["Base", "Gâteau", "Soupe"])
+        self.assertTrue(any("ignorée(s)" in t for t in self.alertes_toast()), self.alertes_toast())
+        base = {r["nom"]: r for r in self.page.evaluate(f"JSON.parse(localStorage.getItem('{KEY}')).recettes")}
+        self.assertEqual(base["Soupe"]["ingredients"], ["oignon", "carotte"])
+        self.assertEqual((base["Soupe"]["etapes"], base["Soupe"]["note"], base["Soupe"]["total_min"]), ([], 4.5, None))
+        self.assertEqual(base["Gâteau"]["ingredients"], ["1", "farine"])
+        self.assertNotIn("_ing", base["Soupe"])
+        # fichier qui n'est pas une liste de recettes : accepté sans rien casser
+        self.charger([{"nom": "Autre"}])
+        self.page.locator(".card", has_text="Autre").wait_for()
+
+    def test_stockage_navigateur_corrompu_ne_casse_pas_la_page(self):
+        self.ouvrir()
+        self.page.evaluate("""([key]) => localStorage.setItem(key, JSON.stringify({
+            recettes: [null, 5, {nom: "Seule valide", ingredients: 5, etapes: "a\\nb"}, {nom: ["x"]}], favs: "abc", panier: {a: 1}}))""", [KEY])
+        self.page.reload()
+        self.page.locator(".card", has_text="Seule valide").wait_for()
+        self.assertEqual(self.noms_affiches(), ["Seule valide"])
+        self.assertEqual(self.page.inner_text("#nbPanier"), "0")
+
+    def test_accessibilite_clavier_et_annonces(self):
+        """Charger JSON et les filtres sont de vrais boutons ; les annonces passent par une zone role=status ;
+        les champs de la fenêtre d'import ont un nom accessible."""
+        self.ouvrir()
+        self.assertEqual(self.page.eval_on_selector("#btnCharger", "e => e.tagName"), "BUTTON")
+        self.assertEqual(self.page.get_attribute("#toasts", "role"), "status")
+        self.charger([recette(1), recette(2)])
+        self.page.fill("#avecIn", "poulet")
+        self.page.press("#avecIn", "Enter")
+        puce = self.page.locator("#avecChips button.chip")
+        self.assertEqual(puce.get_attribute("aria-label"), "Retirer le filtre poulet")
+        puce.focus()
+        self.page.keyboard.press("Enter")                              # retirer au clavier
+        self.assertEqual(self.page.locator("#avecChips .chip").count(), 0)
+        self.assertEqual(self.page.evaluate("document.activeElement.id"), "avecIn", "le focus revient au champ")
+        self.ouvrir_import()
+        for nom in ("Source des recettes", "Mot-clé ou titre à chercher", "Nombre maximum de résultats",
+                    "Adresse d'une recette ou d'une page de sélection"):
+            self.assertTrue(self.page.get_by_label(nom).first.is_visible(), nom)
+        self.assertEqual(self.page.get_attribute("#impLog", "role"), "log")
+
     def test_fractions_en_exposant(self):
         """Dans la fiche, seuls les nombres mixtes (« 1 1/2 », « 2 1/4 ») ont la fraction en exposant ; « 1/2 gousse » reste seule."""
         self.ouvrir()
@@ -474,7 +525,7 @@ class Interface(unittest.TestCase):
         return self.page.eval_on_selector(dialogue, "d => d.open")
 
     def alertes_toast(self):
-        return self.page.eval_on_selector_all("body > div", "els => els.map(e => e.textContent)")
+        return self.page.eval_on_selector_all("#toasts > div", "els => els.map(e => e.textContent)")
 
     def test_numero_de_version_affiche(self):
         version_page = s.VERSION
@@ -714,7 +765,7 @@ class Interface(unittest.TestCase):
     def test_charger_json_par_le_bouton(self):
         self.ouvrir()
         with self.page.expect_file_chooser() as choix:
-            self.page.click("label[for=file]")                          # le vrai bouton 📂
+            self.page.click("#btnCharger")                              # le vrai bouton 📂
         choix.value.set_files({"name": "a.json", "mimeType": "application/json",
                                "buffer": json.dumps([recette(1)]).encode()})
         self.page.wait_for_selector(".card")
