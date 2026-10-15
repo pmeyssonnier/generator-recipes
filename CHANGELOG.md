@@ -8,6 +8,8 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.6.0] - 2026-10-15
+
 ### Ajouté
 - Filtres regroupés en **accordéons** (Ingrédients, Temps et note, Source et catégorie, Tri et favoris) : ouverts sur grand écran, **repliés au démarrage sur téléphone** pour laisser la place aux recettes ; dépliables au clic et au clavier.
 
@@ -186,7 +188,8 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.5.2...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.0
 [1.5.2]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.5.2
 [1.5.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.5.1
 [1.5.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.5.0
