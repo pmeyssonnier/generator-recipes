@@ -11,6 +11,7 @@ d'une page de sélection (lister_page) sont simulées : aucun accès réseau ext
 """
 import json
 import os
+import pathlib
 import socket
 import re
 import shutil
@@ -704,6 +705,32 @@ class Interface(unittest.TestCase):
         base = self.page.evaluate(f"JSON.parse(localStorage.getItem('{KEY}')).recettes")      # classement enregistré
         self.assertEqual([r["categorie"] for r in base if r["nom"] == "Soupe de potiron"], ["Entrée"])
 
+    def test_port_personnalise_hors_serveur(self):
+        # Page ouverte en fichier : ?port=8766 désigne le serveur local, et le choix est retenu.
+        vus = []
+        self.page.on("request", lambda r: vus.append(r.url))
+        self.page.goto(pathlib.Path(s.DIR_PAGE, "generateur-recettes.html").as_uri() + "?port=8766")
+        self.page.wait_for_function("() => document.getElementById('srvStatus')", polling=100)
+        self.page.wait_for_timeout(800)
+        self.assertTrue(any(u.startswith("http://localhost:8766/") for u in vus), vus)
+        self.assertFalse(any(u.startswith("http://localhost:8765/") for u in vus), vus)
+        stockage = self.page.evaluate("(() => { try { return localStorage.getItem('recettes.port') === '8766'; }"
+                                      " catch { return false; } })()")
+        if stockage:                                    # (certains moteurs refusent le stockage des fichiers)
+            vus.clear()
+            self.page.goto(pathlib.Path(s.DIR_PAGE, "generateur-recettes.html").as_uri())     # sans paramètre : retenu
+            self.page.wait_for_timeout(800)
+            self.assertTrue(any(u.startswith("http://localhost:8766/") for u in vus), vus)
+        self.erreurs.clear()           # serveur absent sur ce port : les refus de connexion sont attendus
+
+    def test_journal_d_import_non_cumule(self):
+        self.ouvrir()
+        self.ouvrir_import()
+        self.page.evaluate("document.getElementById('impLog').textContent = 'ancien message\\n'")
+        self.page.keyboard.press("Escape")
+        self.ouvrir_import()
+        self.assertNotIn("ancien message", self.page.inner_text("#impLog"))
+
     def test_filtres_en_accordeon(self):
         # Grand écran : groupes ouverts ; téléphone : repliés, dépliables au clic et au clavier.
         self.ouvrir()
@@ -784,6 +811,16 @@ class Interface(unittest.TestCase):
         self.ouvrir()
         with self.page.expect_file_chooser() as choix:
             self.page.click("#btnCharger")                              # le vrai bouton 📂
+        choix.value.set_files({"name": "a.json", "mimeType": "application/json",
+                               "buffer": json.dumps([recette(1)]).encode()})
+        self.page.wait_for_selector(".card")
+        self.assertIn("1 recette ajoutée(s)", self.alertes_toast())
+
+    def test_charger_json_au_clavier(self):
+        self.ouvrir()
+        self.page.focus("#btnCharger")
+        with self.page.expect_file_chooser() as choix:
+            self.page.keyboard.press("Enter")                           # sans souris
         choix.value.set_files({"name": "a.json", "mimeType": "application/json",
                                "buffer": json.dumps([recette(1)]).encode()})
         self.page.wait_for_selector(".card")

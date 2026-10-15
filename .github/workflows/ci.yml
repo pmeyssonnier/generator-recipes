@@ -58,12 +58,4 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Construire l'exécutable (PyInstaller)
-        run: |
-          python -m pip install pyinstaller pdfplumber
-          python outils/construire_exe.py .
-      - name: Essai de l'exécutable
-        run: python outils/essai_exe.py (Get-ChildItem recettes-v*.exe).FullName
+      - uses: ./.github/actions/exe-windows        # construction + essai (étapes communes)

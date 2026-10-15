@@ -12,7 +12,7 @@ Compatible Windows, Linux, macOS et Android (Termux).
 Les recettes importées sont enregistrées dans recettes.json,
 dans le même dossier que ce script (même format que le script Colab).
 """
-import html, ipaddress, json, os, re, shutil, socket, subprocess, sys, threading, time, unicodedata, webbrowser, zlib
+import collections, html, ipaddress, json, os, re, shutil, socket, subprocess, sys, threading, time, unicodedata, webbrowser, zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
@@ -72,8 +72,9 @@ HOTES |= {h.strip().lower() for h in os.environ.get("RECETTES_HOTES", "").split(
 _net_lock = threading.Lock()
 _file_lock = threading.Lock()
 _last = [0.0]
-_cache = {}
+_cache = collections.OrderedDict()      # url -> texte de la page (le plus récemment utilisé en dernier)
 MAX_CACHE = 200          # pages gardées en mémoire
+MAX_CACHE_OCTETS = 40 * 1024 * 1024      # ... et au plus ~40 Mo de texte au total
 
 
 # ---------------- Page HTML ----------------
@@ -185,14 +186,38 @@ def telecharger(url, timeout=20, _sauts=0):
     return telecharger(cible, timeout, _sauts + 1)
 
 
+class PageIndisponible(ValueError):
+    """Le site a répondu 200 avec une page d'erreur (« Site Unavailable », anti-robot…) au lieu de la page demandée."""
+
+
+ERREUR_TITRE_RE = re.compile(r"<title[^>]*>[^<]*(site unavailable|service unavailable|access denied|just a moment|"
+                             r"attention required|temporarily unavailable|too many requests)[^<]*</title>", re.I)
+
+
+def verifier_page(url, txt):
+    """Refuse les pages d'erreur renvoyées avec un code 200 : elles ne doivent ni être lues ni rester en cache."""
+    m = ERREUR_TITRE_RE.search(txt[:20000])
+    if m and len(txt) < 50000:
+        raise PageIndisponible(f"{domaine(url)} a renvoyé une page d'erreur (« {m.group(1).strip()} ») : "
+                               "réessaie dans quelques minutes")
+
+
+def _cache_ajouter(url, txt):
+    """Cache LRU borné en nombre de pages ET en taille totale (somme recalculée : 200 entrées au plus)."""
+    _cache.pop(url, None)
+    _cache[url] = txt
+    while len(_cache) > 1 and (len(_cache) > MAX_CACHE or sum(map(len, _cache.values())) > MAX_CACHE_OCTETS):
+        _cache.popitem(last=False)
+
+
 def fetch(url):
     if url in _cache:
+        _cache.move_to_end(url)
         return _cache[url]
     data, charset = telecharger(url)
     txt = data.decode(charset, errors="replace")
-    if len(_cache) >= MAX_CACHE:
-        _cache.pop(next(iter(_cache)))        # plus ancienne entrée
-    _cache[url] = txt
+    verifier_page(url, txt)
+    _cache_ajouter(url, txt)
     return txt
 
 
@@ -425,7 +450,10 @@ SOURCES = {
 PREFIXE_PDF = "efarmz:"            # identifiant d'une recette de PDF : efarmz:fichier.pdf#page
 MAX_PDF_OCTETS = 200 * 1024 * 1024
 MAX_PDF_FICHIERS = 200
-_cache_pdf = {}                    # (fichier, taille, date, personnes) -> (recettes, rapport)
+_cache_pdf = collections.OrderedDict()    # (fichier, taille, date, personnes) -> (recettes, rapport), LRU
+MAX_CACHE_PDF = 5                  # extractions gardées
+MAX_CACHE_PDF_OCTETS = 60 * 1024 * 1024    # ... et ~60 Mo au total (images comprises)
+_cache_pdf_taille = {}
 _verrou_pdf = threading.Lock()
 
 
@@ -471,13 +499,19 @@ def lire_pdf(nom, personnes=2):
     cle = (nom, st.st_size, st.st_mtime_ns, personnes)
     with _verrou_pdf:                                 # une extraction à la fois (CPU, mémoire)
         if cle not in _cache_pdf:
-            if len(_cache_pdf) >= 5:
-                _cache_pdf.clear()
             pdf = _module_pdf()
             try:
-                _cache_pdf[cle] = pdf.convertir(chemin, personnes)
+                resultat = pdf.convertir(chemin, personnes)
             except pdf.PdfIndisponible as e:
                 raise PdfIndisponible(str(e)) from None
+            _cache_pdf[cle] = resultat
+            _cache_pdf_taille[cle] = len(json.dumps(resultat, default=str, ensure_ascii=False))
+            while len(_cache_pdf) > 1 and (len(_cache_pdf) > MAX_CACHE_PDF
+                                           or sum(_cache_pdf_taille.values()) > MAX_CACHE_PDF_OCTETS):
+                ancienne = next(iter(_cache_pdf))              # la moins récemment utilisée
+                del _cache_pdf[ancienne]
+                del _cache_pdf_taille[ancienne]
+        _cache_pdf.move_to_end(cle)
         return _cache_pdf[cle]
 
 

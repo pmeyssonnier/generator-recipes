@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https: http: data:; connect-src 'self' http://localhost:8765; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https: http: data:; connect-src 'self' http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none'">
 <title>Générateur de recettes</title>
 <style>
 :root{
@@ -38,10 +38,17 @@ main{display:grid;grid-template-columns:280px 1fr;gap:20px;padding:20px;max-widt
 aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;height:fit-content;
   position:sticky;top:80px}
 @media (max-width:800px){aside{position:static}}
+@media (max-width:800px){
+  header{position:static;padding:10px 12px;gap:8px}      /* l'en-tête (3 lignes de boutons) ne mange plus l'écran en défilant */
+  header h1{font-size:1.1rem}
+  header .actions{gap:6px}
+  header .actions button{padding:6px 9px}
+  .row button{white-space:nowrap;padding:7px 8px}          /* « Surprends-moi » et « Réinitialiser » restent sur une ligne */
+}
 aside label{display:block;font-weight:600;font-size:.85rem;margin:14px 0 6px}
 aside label:first-child{margin-top:0}
 .fgrp{border-top:1px solid var(--line);padding:10px 0}
-.fgrp:first-of-type{border-top:none;padding-top:0}
+.fgrp:first-of-type{border-top:none;padding-top:0;margin-top:14px}
 .fgrp>summary{cursor:pointer;font-weight:700;font-size:.9rem;padding:4px 0;list-style:none;display:flex;
   justify-content:space-between;align-items:center}
 .fgrp>summary::-webkit-details-marker{display:none}
@@ -642,6 +649,19 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // monpc.local…) → l'API est sur la même origine : on le vérifie en interrogeant /api/ping.
   // Page GitHub Pages ou ouverte en file:// → serveur local de l'appareil (http://localhost:8765).
   const HORS_SERVEUR = location.protocol === "file:" || /(^|\.)github\.io$/i.test(location.hostname);
+  // Port du serveur local quand la page n'en est pas servie (GitHub Pages, fichier) : 8765 par défaut,
+  // ou celui de RECETTES_PORT, retenu après un lien du type .../index.html?port=8766.
+  function portLocal() {
+    const valide = v => /^\d{4,5}$/.test(String(v)) && +v >= 1024 && +v <= 65535;
+    try {
+      const demande = new URLSearchParams(location.search).get("port");
+      if (valide(demande)) { localStorage.setItem("recettes.port", demande); return +demande; }
+      const garde = localStorage.getItem("recettes.port");
+      if (valide(garde)) return +garde;
+    } catch { /* stockage indisponible : port par défaut */ }
+    return 8765;
+  }
+  const URL_LOCALE = `http://localhost:${portLocal()}`;
   const apiPrete = (async () => {
     if (!HORS_SERVEUR && location.protocol.startsWith("http")) {
       try {
@@ -649,7 +669,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
         if (r.ok && (await r.json()).ok === true) return "";
       } catch { /* pas notre serveur : repli ci-dessous */ }
     }
-    return "http://localhost:8765";
+    return URL_LOCALE;
   })();
   let busy = false;
 
@@ -958,10 +978,11 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 
   $("btnImport").addEventListener("click", async () => {
     $("dlgImport").showModal();
+    if (!busy) $("impLog").textContent = "";                      // pas d'avertissements empilés d'une ouverture à l'autre
     if (!await ping()) {
       log("⚠ Serveur local injoignable. Lance : python serveur_recettes.py");
       if (location.protocol === "file:")
-        log("ℹ Page ouverte comme fichier : utilise plutôt http://localhost:8765 " +
+        log(`ℹ Page ouverte comme fichier : utilise plutôt ${URL_LOCALE} ` +
             "(ou lance le serveur avec RECETTES_ORIGINES=null)");
     } else if (!sources.length) {
       await chargerSources();

@@ -3,6 +3,7 @@ import io
 import json
 import os
 import sys
+import tempfile
 import threading
 import unittest
 import urllib.error
@@ -362,6 +363,50 @@ class Taille(unittest.TestCase):
                 s.fetch(f"https://a.test/{i}")
         self.assertEqual(len(s._cache), s.MAX_CACHE)
         self.assertNotIn("https://a.test/0", s._cache)                 # la plus ancienne est évincée
+
+    def test_cache_borne_en_taille_et_lru(self):
+        s._cache.clear()
+        self.addCleanup(s._cache.clear)
+        gros = ("x" * (s.MAX_CACHE_OCTETS // 3)).encode()
+        with mock.patch.object(s, "telecharger", return_value=(gros, "utf-8")) as tel:
+            s.fetch("https://a.test/1")
+            s.fetch("https://a.test/2")
+            s.fetch("https://a.test/1")                                # relue : devient la plus récente
+            s.fetch("https://a.test/3")
+            s.fetch("https://a.test/4")                                # dépasse la taille : on évince la moins récente
+            self.assertEqual(tel.call_count, 4)
+        self.assertLessEqual(sum(map(len, s._cache.values())), s.MAX_CACHE_OCTETS)
+        self.assertNotIn("https://a.test/2", s._cache)
+        self.assertIn("https://a.test/4", s._cache)
+
+    def test_page_d_erreur_en_200_refusee_et_non_gardee(self):
+        s._cache.clear()
+        self.addCleanup(s._cache.clear)
+        erreur = b"<html><head><title>Site Unavailable</title></head><body>Please try again</body></html>"
+        with mock.patch.object(s, "telecharger", return_value=(erreur, "utf-8")):
+            with self.assertRaises(s.PageIndisponible) as ctx:
+                s.fetch("https://www.marmiton.org/recettes/recette_x.aspx")
+        self.assertIn("réessaie", str(ctx.exception))
+        self.assertEqual(len(s._cache), 0)
+        ok = b"<html><head><title>Tarte aux pommes - Marmiton</title></head><body>ok</body></html>"
+        with mock.patch.object(s, "telecharger", return_value=(ok, "utf-8")):
+            self.assertIn("Tarte", s.fetch("https://www.marmiton.org/recettes/recette_y.aspx"))
+
+    def test_cache_pdf_borne(self):
+        s._cache_pdf.clear()
+        s._cache_pdf_taille.clear()
+        self.addCleanup(lambda: (s._cache_pdf.clear(), s._cache_pdf_taille.clear()))
+        pdf = mock.Mock()
+        pdf.convertir.side_effect = lambda chemin, pers: ([{"nom": chemin}], [])
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(s, "DOSSIER_PDF", d), \
+                mock.patch.object(s, "_module_pdf", return_value=pdf):
+            for i in range(s.MAX_CACHE_PDF + 3):
+                open(os.path.join(d, f"f{i}.pdf"), "wb").write(b"%PDF")
+                s.lire_pdf(f"f{i}.pdf")
+            self.assertEqual(len(s._cache_pdf), s.MAX_CACHE_PDF)
+            self.assertEqual(set(s._cache_pdf), set(s._cache_pdf_taille))
+            s.lire_pdf("f7.pdf")                                      # déjà en cache : pas de nouvelle extraction
+            self.assertEqual(pdf.convertir.call_count, s.MAX_CACHE_PDF + 3)
 
 
 class Distant(s.Handler):
