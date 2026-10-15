@@ -105,6 +105,25 @@ class ScriptsTermux(unittest.TestCase):
         self.assertIn("Version : v9.9.9", r.stdout)
         self.assertIn("serveur_recettes ", r.stdout)                    # --version affichée
 
+    def test_maj_ne_revient_pas_en_arriere(self):
+        """Serveur installé en 1.5.1 (après « main »), dernière release publiée 1.5.0 : rien n'est téléchargé ni remplacé."""
+        ecrire(os.path.join(self.bin, "python"), '#!/bin/bash\necho "serveur_recettes 1.5.1"\n')
+        for nom in ("serveur_recettes.py", "generateur-recettes.html"):
+            ecrire(os.path.join(self.dossier, nom), "INSTALLE", executable=False)
+        r = self.lancer("Recettes-maj", sources=self.sources_release("v1.5.0"), RECETTES_DOSSIER=self.dossier)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("plus récente", r.stdout)
+        self.assertEqual(self.lire(self.dossier, "serveur_recettes.py"), "INSTALLE")
+        self.assertEqual(len(self.journal_lignes()), 1, "seul l'appel à l'API des releases")
+
+    def test_maj_version_imposee_permet_de_revenir_en_arriere(self):
+        ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
+        ecrire(os.path.join(self.dossier, "serveur_recettes.py"), "INSTALLE", executable=False)
+        r = self.lancer("Recettes-maj", sources=self.sources_release("v1.5.0"), RECETTES_DOSSIER=self.dossier,
+                        RECETTES_VERSION="v1.5.0")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.lire(self.dossier, "serveur_recettes.py"), self.lire(RACINE, "serveur_recettes.py"))
+
     def test_maj_version_au_choix(self):
         ecrire(os.path.join(self.bin, "python"), FAUX_PYTHON)
         self.lancer("Recettes-maj", RECETTES_DOSSIER=self.dossier, RECETTES_VERSION="main")

@@ -21,6 +21,19 @@ mettre_a_jour() {
     fi
   fi
   case "$VERSION" in *[!A-Za-z0-9._-]*|"") echo "Version invalide : $VERSION"; attendre; return 1;; esac
+  # Sans version imposée, on ne revient jamais en arrière : version installée plus récente que la dernière release
+  # (par exemple après RECETTES_VERSION=main) = rien à faire.
+  if [ -z "${RECETTES_VERSION:-}" ] && [ -f serveur_recettes.py ]; then
+    local INSTALLEE PLUS_RECENTE
+    INSTALLEE=$(python serveur_recettes.py --version 2>/dev/null | sed -n 's/^serveur_recettes //p' | head -n1)
+    if [ -n "$INSTALLEE" ] && [ "$INSTALLEE" != "${VERSION#v}" ]; then
+      PLUS_RECENTE=$(printf '%s\n%s\n' "${VERSION#v}" "$INSTALLEE" | sort -V | tail -n1)
+      if [ "$PLUS_RECENTE" = "$INSTALLEE" ]; then
+        echo "Déjà à jour : la version installée ($INSTALLEE) est plus récente que la dernière release publiée (${VERSION#v})."
+        attendre; return 0
+      fi
+    fi
+  fi
   local BASE="https://raw.githubusercontent.com/$DEPOT/$VERSION"
   echo "Version : $VERSION"
   for f in serveur_recettes.py generateur-recettes.html; do
