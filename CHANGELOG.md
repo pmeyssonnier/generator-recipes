@@ -8,6 +8,13 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.5.1] - 2026-10-15
+
+### Ajouté
+- `python serveur_recettes.py --maj [vX.Y.Z|main]` : met à jour le serveur, la page et le module PDF depuis la dernière release GitHub
+  (tout ou rien, `recettes.json` jamais touché). Les lanceurs `lancer-recettes.bat` (Windows) et `lancer-recettes.sh` / `.command` l'appellent
+  à chaque lancement quand le dossier n'est pas un clone git (archive `.zip`) ; avec git, ils font `git pull` comme avant.
+
 ### Corrigé
 - Mise à jour (`--maj`, `Recettes-maj` sous Termux) : plus de **retour en arrière** automatique. Si la version installée est plus récente que la
   dernière release publiée (par exemple installée depuis `main`), rien n'est remplacé ; une version demandée à la main reste possible.
@@ -18,13 +25,6 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 - `tester_sources.py` ne plante plus sur la source eFarmz (dossier local) : elle est ignorée.
 - Identifiant de PDF mal formé : HTTP 400 ; PDF ou page absents : HTTP 404 (au lieu de 500).
 - `outils/construire_archive.py` ferme ses fichiers.
-
-## [1.5.1] - 2026-10-13
-
-### Ajouté
-- `python serveur_recettes.py --maj [vX.Y.Z|main]` : met à jour le serveur, la page et le module PDF depuis la dernière release GitHub
-  (tout ou rien, `recettes.json` jamais touché). Les lanceurs `lancer-recettes.bat` (Windows) et `lancer-recettes.sh` / `.command` l'appellent
-  à chaque lancement quand le dossier n'est pas un clone git (archive `.zip`) ; avec git, ils font `git pull` comme avant.
 
 ## [1.5.0] - 2026-10-13
 
