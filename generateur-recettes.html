@@ -40,6 +40,15 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;pa
 @media (max-width:800px){aside{position:static}}
 aside label{display:block;font-weight:600;font-size:.85rem;margin:14px 0 6px}
 aside label:first-child{margin-top:0}
+.fgrp{border-top:1px solid var(--line);padding:10px 0}
+.fgrp:first-of-type{border-top:none;padding-top:0}
+.fgrp>summary{cursor:pointer;font-weight:700;font-size:.9rem;padding:4px 0;list-style:none;display:flex;
+  justify-content:space-between;align-items:center}
+.fgrp>summary::-webkit-details-marker{display:none}
+.fgrp>summary::after{content:"▾";color:var(--muted);transition:transform .15s}
+.fgrp:not([open])>summary::after{transform:rotate(-90deg)}
+.fgrp>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.fgrp>summary+label{margin-top:8px}
 input[type=text],select{width:100%;font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;
   background:var(--bg);color:var(--text)}
 input[type=range]{width:100%;accent-color:var(--accent)}
@@ -134,6 +143,8 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     <label for="q">Recherche</label>
     <input type="text" id="q" placeholder="Nom, catégorie, mot-clé…">
 
+    <details class="fgrp" open>
+    <summary>🥕 Ingrédients</summary>
     <label for="avecIn">Avec ces ingrédients</label>
     <input type="text" id="avecIn" placeholder="ex. poulet  ↵">
     <div class="chips" id="avecChips"></div>
@@ -142,7 +153,10 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     <input type="text" id="sansIn" placeholder="ex. crème  ↵">
     <div class="chips" id="sansChips"></div>
     <div class="hint">Entrée pour ajouter, clic sur une étiquette pour la retirer. Accents ignorés.</div>
+    </details>
 
+    <details class="fgrp" open>
+    <summary>⏱ Temps et note</summary>
     <label for="tmax">Temps total max : <span id="tmaxVal">illimité</span></label>
     <input type="range" id="tmax" min="0" max="240" step="10" value="0">
 
@@ -151,13 +165,19 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       <option value="0">Toutes</option><option value="3">3+</option>
       <option value="4">4+</option><option value="4.5">4,5+</option>
     </select>
+    </details>
 
+    <details class="fgrp" open>
+    <summary>🏷 Source et catégorie</summary>
     <label for="src">Source</label>
     <select id="src"><option value="">Toutes</option></select>
 
     <label for="cat">Catégorie</label>
     <select id="cat"><option value="">Toutes</option></select>
+    </details>
 
+    <details class="fgrp" open>
+    <summary>↕ Tri et favoris</summary>
     <label for="tri">Trier par</label>
     <select id="tri">
       <option value="note">Note</option><option value="avis">Nombre d'avis</option>
@@ -166,6 +186,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     </select>
 
     <label><input type="checkbox" id="favOnly"> Favoris uniquement</label>
+    </details>
 
     <div class="row">
       <button class="primary" id="btnSurprise">🎲 Surprends-moi</button>
@@ -829,6 +850,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   }
   $("btnSurprise").addEventListener("click", surprise);
 
+  // Téléphone : les groupes de filtres démarrent repliés pour laisser la place aux recettes.
+  if (window.matchMedia && matchMedia("(max-width:800px)").matches)
+    document.querySelectorAll("details.fgrp").forEach(d => d.open = false);
   $("btnReset").addEventListener("click", () => {
     Object.assign(st, { q:"", avec:[], sans:[], tmax:0, nmin:0, cat:"", src:"", tri:"note", favOnly:false, surprise:null, visibles:PAGE });
     $("q").value = ""; $("tmax").value = 0; $("tmaxVal").textContent = "illimité";

@@ -8,6 +8,9 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Ajouté
+- Filtres regroupés en **accordéons** (Ingrédients, Temps et note, Source et catégorie, Tri et favoris) : ouverts sur grand écran, **repliés au démarrage sur téléphone** pour laisser la place aux recettes ; dépliables au clic et au clavier.
+
 ## [1.5.2] - 2026-10-15
 
 ### Corrigé

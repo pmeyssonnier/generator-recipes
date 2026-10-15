@@ -704,6 +704,24 @@ class Interface(unittest.TestCase):
         base = self.page.evaluate(f"JSON.parse(localStorage.getItem('{KEY}')).recettes")      # classement enregistré
         self.assertEqual([r["categorie"] for r in base if r["nom"] == "Soupe de potiron"], ["Entrée"])
 
+    def test_filtres_en_accordeon(self):
+        # Grand écran : groupes ouverts ; téléphone : repliés, dépliables au clic et au clavier.
+        self.ouvrir()
+        self.assertEqual(self.page.locator("details.fgrp[open]").count(), 4)
+        self.assertTrue(self.page.is_visible("#cat"))
+        self.page.click("details.fgrp:has(#cat) > summary")
+        self.assertFalse(self.page.is_visible("#cat"))
+        self.page.click("details.fgrp:has(#cat) > summary")
+        self.assertTrue(self.page.is_visible("#cat"))
+        self.page.set_viewport_size({"width": 400, "height": 800})
+        self.ouvrir()
+        self.assertEqual(self.page.locator("details.fgrp[open]").count(), 0)
+        self.assertFalse(self.page.is_visible("#cat"))
+        self.page.focus("details.fgrp:has(#cat) > summary")
+        self.page.keyboard.press("Enter")
+        self.assertTrue(self.page.is_visible("#cat"))
+        self.assertTrue(self.page.is_visible("#btnSurprise"))        # les boutons restent accessibles
+
     def test_filtres_tri_et_reinitialisation(self):
         self.ouvrir()
         self.charger([recette(1, note=4.9, total_min=30, categorie="Plat"),
