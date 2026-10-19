@@ -149,10 +149,19 @@ class Interface(unittest.TestCase):
         self.page.goto(url or self.url)
         return self.page
 
-    def charger(self, recettes):
+    def charger(self, recettes, confirmer=True):
+        """Charge un JSON. Base vide : import direct. Base non vide : un aperçu s'ouvre ; on le valide (confirmer=True)
+        ou on le laisse ouvert pour que le test le pilote."""
+        vide = self.page.inner_text("#count") == "Aucune recette"
         self.page.set_input_files("#file", {"name": "base.json", "mimeType": "application/json",
                                             "buffer": json.dumps(recettes).encode()})
-        self.page.wait_for_selector(".card")
+        if vide:
+            self.page.wait_for_selector(".card")
+            return
+        self.page.wait_for_selector("#dlgApercu[open]")
+        if confirmer:
+            self.page.click("#apercuOk")
+            self.page.wait_for_selector("#dlgApercu", state="hidden")
 
     def actif(self):
         return self.page.evaluate("document.activeElement.className + '|' + "
@@ -925,6 +934,55 @@ class Interface(unittest.TestCase):
                                "buffer": json.dumps([recette(1)]).encode()})
         self.page.wait_for_selector(".card")
         self.assertIn("1 recette ajoutée(s)", self.alertes_toast())
+
+    def test_apercu_avant_import_d_une_sauvegarde(self):
+        self.ouvrir()
+        self.charger([recette(1), recette(2, note=3.0)])                  # base vide : import direct, pas d'aperçu
+        self.assertFalse(self.page.is_visible("#dlgApercu"))
+        fichier = [recette(1),                                             # identique
+                   recette(2, note=4.9, nom="Recette 2 améliorée"),        # même URL, contenu différent
+                   recette(3, favori=True),                                # nouvelle, et favorite
+                   {"pas": "une recette"}, 42]                             # 2 entrées invalides
+        self.charger(fichier, confirmer=False)
+        texte = self.page.inner_text("#apercuListe")
+        self.assertIn("1 nouvelle recette à ajouter", texte)
+        self.assertIn("1 recette déjà présente et identique", texte)
+        self.assertIn("1 recette déjà présente mais différente", texte)
+        self.assertIn("1 favori du fichier sera ajouté", texte)
+        self.assertIn("2 entrées ignorées", texte)
+        self.assertEqual(self.page.inner_text("#apercuOk"), "Importer 2 recettes")           # nouvelle + remplacement
+        self.page.click("#dlgApercu .row [data-close]")                                      # Annuler
+        self.page.wait_for_selector("#dlgApercu", state="hidden")
+        self.assertEqual(self.noms_affiches(), ["Recette 1", "Recette 2"], "annuler n'importe rien")
+        favs = lambda: self.page.evaluate(f"JSON.parse(localStorage.getItem('{KEY}')).favs.length")   # noqa: E731
+        self.assertEqual(favs(), 0)
+        # « Garder celles de cet appareil » : seule la nouvelle est ajoutée, l'existante différente reste telle quelle
+        self.charger(fichier, confirmer=False)
+        self.page.check("input[name=apEcraser][value='0']")
+        self.assertEqual(self.page.inner_text("#apercuOk"), "Importer 1 recette")
+        self.page.click("#apercuOk")
+        self.page.wait_for_selector("#dlgApercu", state="hidden")
+        self.page.wait_for_function("() => document.querySelectorAll('.card').length === 3", polling=100)
+        self.assertEqual(self.noms_affiches(), ["Recette 1", "Recette 2", "Recette 3"])
+        self.assertEqual(self.page.evaluate(f"JSON.parse(localStorage.getItem('{KEY}')).recettes.find(r => r.nom === 'Recette 2').note"), 3.0)
+        # « Remplacer » (par défaut) : l'existante différente prend la version du fichier
+        self.charger(fichier, confirmer=False)
+        self.assertEqual(self.page.inner_text("#apercuOk"), "Importer 1 recette")            # Recette 3 existe maintenant
+        self.page.click("#apercuOk")
+        self.page.wait_for_selector("#dlgApercu", state="hidden")
+        self.page.wait_for_function("() => [...document.querySelectorAll('.card h3')].some(h => h.textContent === 'Recette 2 améliorée')", polling=100)
+        self.assertEqual(self.page.locator(".card").count(), 3, "aucun doublon créé")
+
+    def test_apercu_rien_a_importer(self):
+        self.ouvrir()
+        self.charger([recette(1), recette(2)])
+        self.charger([recette(1), recette(2)], confirmer=False)           # exactement la même sauvegarde
+        self.assertIn("2 recettes déjà présentes et identiques", self.page.inner_text("#apercuListe"))
+        self.assertEqual(self.page.inner_text("#apercuOk"), "Rien à importer")
+        self.assertTrue(self.page.is_disabled("#apercuOk"))
+        self.assertFalse(self.page.is_visible("#apercuChoix"))
+        self.page.keyboard.press("Escape")
+        self.page.wait_for_selector("#dlgApercu", state="hidden")
 
     def test_charger_json_au_clavier(self):
         self.ouvrir()

@@ -143,6 +143,12 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   background:var(--bg);color:var(--text)}
 .log{font-family:ui-monospace,Consolas,monospace;font-size:.8rem;background:var(--bg);border:1px solid var(--line);
   border-radius:8px;padding:8px;max-height:160px;overflow:auto;white-space:pre-wrap;margin-top:12px;min-height:40px}
+.apercu{list-style:none;margin:8px 0;padding:0;display:grid;gap:6px}
+.apercu li{display:flex;gap:8px}
+.apercu-choix{margin:14px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;display:grid;gap:6px}
+.apercu-choix legend{font-weight:600;font-size:.85rem;padding:0 6px}
+.apercu-choix label{display:flex;gap:8px;align-items:center;cursor:pointer;margin:0}
+#apercuDetail{margin:6px 0;font-size:.9rem}
 .opt{display:flex;flex-direction:column;gap:10px}
 .opt button{text-align:left;padding:12px 14px}
 .opt small{display:block;color:var(--muted);margin-top:2px}
@@ -152,7 +158,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 
 <header>
   <button type="button" id="btnFiltres" aria-controls="filtres" aria-expanded="false">☰ Filtres <span class="badge" id="nbFiltres" hidden>0</span></button>
-  <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.6.3</small></h1>
+  <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.7.0</small></h1>
   <div class="actions">
     <span class="count" id="count">Aucune recette</span>
     <button type="button" class="primary" id="btnCharger">📂 Charger JSON</button>
@@ -280,6 +286,24 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
       <button id="impUrlGo">Importer</button>
     </div>
     <div class="log" id="impLog" role="log" aria-live="polite" aria-label="Journal de l'import"></div>
+  </div>
+</dialog>
+
+<dialog id="dlgApercu" aria-labelledby="apercuTitre">
+  <div class="dlg-head"><h2 id="apercuTitre">📥 Aperçu de l'import</h2><button class="icon-btn" data-close aria-label="Annuler l'import">✕</button></div>
+  <div class="dlg-body">
+    <p class="hint" style="margin-top:0">Rien n'est encore importé. Voici ce que contient le fichier, comparé aux recettes de cet appareil :</p>
+    <ul id="apercuListe" class="apercu"></ul>
+    <details id="apercuDetail" hidden><summary>Voir les recettes différentes</summary><ul id="apercuNoms" class="apercu"></ul></details>
+    <fieldset id="apercuChoix" class="apercu-choix" hidden>
+      <legend>Pour les recettes déjà présentes mais différentes :</legend>
+      <label><input type="radio" name="apEcraser" value="1" checked><span>Les <b>remplacer</b> par celles du fichier</span></label>
+      <label><input type="radio" name="apEcraser" value="0"><span><b>Garder</b> celles de cet appareil</span></label>
+    </fieldset>
+    <div class="row" style="margin-top:18px">
+      <button type="button" class="primary" id="apercuOk">Importer</button>
+      <button type="button" data-close>Annuler</button>
+    </div>
   </div>
 </dialog>
 
@@ -467,7 +491,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const cleImport = cle;
   // Seules les recettes reçues sont (ré)indexées. Avec differe = true, l'enregistrement
   // et l'affichage sont repoussés : l'appelant termine par valider() (import en lot).
-  function importer(data, { differe = false } = {}) {
+  function importer(data, { differe = false, ecraser = true } = {}) {
     const arr = Array.isArray(data) ? data
       : data && typeof data === "object" ? (Array.isArray(data.recettes) ? data.recettes : [data]) : [];
     const valides = arr.map(b => [b, normaliserRecette(b)]).filter(([, r]) => r);       // rien n'est modifié avant cette étape
@@ -477,9 +501,10 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
     let ajout = 0;
     for (const [brut, r] of valides) {
       const k = cleImport(r);
-      if (!parUrl.has(k)) ajout++;
       if (brut.favori === true) st.favs.add(cle(r));
       delete r.favori;
+      if (parUrl.has(k)) { if (!ecraser) continue; }      // déjà là : remplacée, ou conservée si on a choisi de garder celle de l'appareil
+      else ajout++;
       parUrl.set(k, r);
       recues.add(r);
     }
@@ -495,7 +520,8 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   const MAX_JSON = 25 * 1024 * 1024;
   const mo = n => (n / 1024 / 1024).toFixed(1).replace(".", ",");
   async function lireFichiers(files) {
-    let ajout = 0, ignorees = 0, cumul = 0;
+    const lots = [];
+    let cumul = 0;
     for (const f of files) {
       cumul += f.size;
       if (f.size > MAX_JSON || cumul > MAX_JSON) {
@@ -504,14 +530,89 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
         cumul -= f.size;
         continue;
       }
-      try {
-        ajout += importer(JSON.parse(await f.text()));
-        ignorees += importer.ignorees;
-      } catch (e) { alert(`Fichier invalide : ${f.name}\n${e.message}`); }
+      try { lots.push(JSON.parse(await f.text())); }
+      catch (e) { alert(`Fichier invalide : ${f.name}\n${e.message}`); }
+    }
+    if (!lots.length) return;
+    // Base vide : rien à comparer, on charge directement. Sinon, un aperçu précise ce qui va se passer.
+    if (recettes.length) apercuImport(lots); else appliquerImport(lots, true);
+  }
+
+  function appliquerImport(lots, ecraser) {
+    let ajout = 0, ignorees = 0;
+    for (const data of lots) {
+      ajout += importer(data, { ecraser });
+      ignorees += importer.ignorees;
     }
     if (ajout) toast(`${pluriel(ajout, "recette")} ajoutée(s)`);
     if (ignorees) toast(`${pluriel(ignorees, "entrée")} ignorée(s) : ce ne sont pas des recettes (nom manquant ou format invalide)`, 6000);
   }
+
+  // Compare ce que contiennent les fichiers à ce que l'appareil a déjà (sans rien modifier).
+  const triee = o => JSON.stringify(Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : 1))));
+  function analyserImport(lots) {
+    const locales = new Map(recettes.map(r => [cleImport(r), r]));
+    const vues = new Set();
+    const a = { nouvelles: 0, identiques: 0, differentes: [], ignorees: 0, doublons: 0, favoris: 0 };
+    for (const data of lots) {
+      const arr = Array.isArray(data) ? data
+        : data && typeof data === "object" ? (Array.isArray(data.recettes) ? data.recettes : [data]) : [];
+      for (const brut of arr) {
+        const r = normaliserRecette(brut);
+        if (!r) { a.ignorees++; continue; }
+        const k = cleImport(r);
+        if (brut.favori === true && !st.favs.has(cle(r))) a.favoris++;
+        if (vues.has(k)) { a.doublons++; continue; }
+        vues.add(k);
+        delete r.favori;
+        const ici = locales.get(k);
+        if (!ici) a.nouvelles++;
+        else if (triee(sansIndex(ici)) === triee(r)) a.identiques++;
+        else a.differentes.push(r.nom);
+      }
+    }
+    return a;
+  }
+  let importEnAttente = null;
+  function majBoutonApercu() {
+    const a = importEnAttente.analyse;
+    const ecraser = document.querySelector("input[name=apEcraser]:checked")?.value !== "0";
+    const n = a.nouvelles + (ecraser ? a.differentes.length : 0);
+    $("apercuOk").textContent = n ? `Importer ${pluriel(n, "recette")}` : "Rien à importer";
+    $("apercuOk").disabled = !n && !a.favoris;
+  }
+  function apercuImport(lots) {
+    const a = analyserImport(lots);
+    importEnAttente = { lots, analyse: a };
+    const ligne = (icone, texte) => `<li><span aria-hidden="true">${icone}</span><span>${texte}</span></li>`;
+    const x = n => (n > 1 ? "s" : "");                     // accord au pluriel
+    const nd = a.differentes.length;
+    $("apercuListe").innerHTML = [
+      ligne("✚", `<b>${a.nouvelles} nouvelle${x(a.nouvelles)} recette${x(a.nouvelles)}</b> à ajouter`),
+      ligne("＝", `${a.identiques} recette${x(a.identiques)} déjà présente${x(a.identiques)} et identique${x(a.identiques)} (rien à changer)`),
+      ligne("✎", `<b>${nd} recette${x(nd)} déjà présente${x(nd)} mais différente${x(nd)}</b>`),
+      a.favoris ? ligne("♥", `${a.favoris} favori${x(a.favoris)} du fichier ${a.favoris > 1 ? "seront ajoutés" : "sera ajouté"} (aucun n'est retiré)`) : "",
+      a.doublons ? ligne("⧉", `${a.doublons} doublon${x(a.doublons)} dans le fichier lui-même (le dernier est retenu)`) : "",
+      a.ignorees ? ligne("⚠", `${a.ignorees} entrée${x(a.ignorees)} ignorée${x(a.ignorees)} (nom manquant ou format invalide)`) : "",
+    ].join("");
+    $("apercuChoix").hidden = !a.differentes.length;
+    $("apercuDetail").hidden = !a.differentes.length;
+    $("apercuNoms").innerHTML = a.differentes.slice(0, 15).map(n => `<li>${esc(n)}</li>`).join("") +
+      (a.differentes.length > 15 ? `<li>… et ${a.differentes.length - 15} autre(s)</li>` : "");
+    document.querySelector("input[name=apEcraser][value='1']").checked = true;
+    majBoutonApercu();
+    $("dlgApercu").showModal();
+    $("apercuOk").focus();
+  }
+  document.querySelectorAll("input[name=apEcraser]").forEach(r => r.addEventListener("change", majBoutonApercu));
+  $("apercuOk").addEventListener("click", () => {
+    const { lots } = importEnAttente;
+    const ecraser = document.querySelector("input[name=apEcraser]:checked").value !== "0";
+    importEnAttente = null;
+    $("dlgApercu").close();
+    appliquerImport(lots, ecraser);
+  });
+  $("dlgApercu").addEventListener("close", () => { importEnAttente = null; });
 
   // ---------- Export JSON ----------
   function telecharger(liste, suffixe) {
@@ -705,7 +806,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // Un serveur local ancien (avant le POST) répond 501 / 405 : l'import se rabat alors sur GET,
   // et l'état du serveur indique qu'il faut le mettre à jour (git pull, puis relancer).
   let serveurAncien = false;
-  const VERSION = "1.6.3";                   // version de la page (même valeur que serveur_recettes.py)
+  const VERSION = "1.7.0";                   // version de la page (même valeur que serveur_recettes.py)
   function badgeServeur(base, fichier, version) {
     const s = $("srvStatus");
     s.className = "srv on";
