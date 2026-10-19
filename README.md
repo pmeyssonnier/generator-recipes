@@ -47,6 +47,13 @@ Sans serveur, `generateur-recettes.html` s'ouvre aussi en double-clic pour consu
 une base chargée via **📂 Charger JSON**. Pour importer depuis une page ouverte en
 `file://`, ouvre plutôt <http://localhost:8765> (ou ajoute `null` à `RECETTES_ORIGINES`).
 
+**Transférer une sauvegarde d'un appareil à l'autre** (PC, téléphone, tablette) : *💾 Exporter → Toute la base*, puis
+*📂 Charger JSON* sur l'autre appareil. Si celui-ci contient déjà des recettes, un **aperçu** s'ouvre avant tout import :
+recettes nouvelles, déjà présentes et identiques, déjà présentes mais différentes (avec leurs noms), favoris du fichier,
+entrées ignorées. Pour les recettes différentes, tu choisis de les **remplacer** par celles du fichier ou de **garder** celles de
+l'appareil ; *Annuler* n'importe rien. Une recette est reconnue par son adresse (URL), sinon par sa page de PDF, sinon par son nom.
+La liste de courses n'est pas dans le fichier.
+
 ### Distribuer l'appli à d'autres personnes (PC)
 
 Chaque release GitHub contient une archive **`recettes-vX.Y.Z.zip`** (Windows, macOS, Linux) : le serveur, la page,

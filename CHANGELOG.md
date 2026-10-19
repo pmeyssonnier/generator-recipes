@@ -8,6 +8,11 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.7.0] - 2026-10-19
+
+### Ajouté
+- **Aperçu avant d'importer un JSON** : quand l'appareil contient déjà des recettes, « 📂 Charger JSON » (et le glisser-déposer) ouvre d'abord un résumé : recettes nouvelles, déjà présentes et identiques, déjà présentes mais différentes (noms listés), favoris du fichier qui seront ajoutés, doublons dans le fichier, entrées ignorées. Pour les recettes différentes, on choisit de les **remplacer** par celles du fichier (comportement habituel) ou de **garder** celles de l'appareil ; « Annuler » n'importe rien. Sur un appareil vide, l'import reste direct.
+
 ## [1.6.3] - 2026-10-15
 
 ### Corrigé
@@ -227,7 +232,8 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.6.3...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.7.0
 [1.6.3]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.3
 [1.6.2]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.2
 [1.6.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.1
