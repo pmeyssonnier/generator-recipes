@@ -44,12 +44,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Installer Playwright et le navigateur
+      - name: Installer Playwright
+        run: python -m pip install playwright pdfplumber
+      - name: Version de Playwright (clé du cache)
+        id: pw
+        run: echo "version=$(python -c 'import importlib.metadata as m; print(m.version("playwright"))')" >> "$GITHUB_OUTPUT"
+      - name: Navigateurs Playwright en cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ matrix.navigateur }}-${{ steps.pw.outputs.version }}
+      - name: Installer le navigateur et ses dépendances système
+        # Avec le cache, le navigateur n'est pas retéléchargé ; les paquets système (apt) sont, eux, toujours installés.
         # Le miroir apt d'Ubuntu se fige parfois sur un paquet : on le fait réessayer, puis échouer vite (au lieu de rester bloqué).
         timeout-minutes: 8
         run: |
           printf 'Acquire::Retries "5";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/80-reessais
-          python -m pip install playwright pdfplumber
           python -m playwright install --with-deps ${{ matrix.navigateur }}
       - name: Nom d'hôte de test (monpc.local)
         run: echo "127.0.0.1 monpc.local" | sudo tee -a /etc/hosts
