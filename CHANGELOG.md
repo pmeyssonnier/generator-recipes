@@ -8,6 +8,9 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Corrigé
+- **Port 8765 occupé ou interdit** (« Address already in use », `WinError 10013` sur Windows) : le serveur essaie maintenant les ports suivants (jusqu'à 8784) et affiche celui qu'il utilise. Si c'est déjà le serveur de recettes qui tourne, il ouvre simplement la page dessus au lieu d'échouer.
+
 ## [1.7.0] - 2026-10-19
 
 ### Ajouté

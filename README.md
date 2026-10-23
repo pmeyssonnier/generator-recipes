@@ -40,7 +40,7 @@ le serveur. Les options se transmettent : `lancer-recettes.bat --lan`.
 |---|---|
 | `--lan` | Accès depuis un autre appareil du même Wi-Fi (l'adresse s'affiche au lancement) |
 | `--no-browser` | N'ouvre pas le navigateur |
-| `RECETTES_PORT=8766` | Change le port |
+| `RECETTES_PORT=8766` | Change le port de départ (si occupé ou interdit, le suivant est essayé : 8765, 8766… ; si le serveur tourne déjà, la page s'ouvre dessus) |
 | `RECETTES_ORIGINES=https://a.org,null` | Autorise d'autres sites à appeler l'API (`null` = page ouverte en `file://`) |
 
 Sans serveur, `generateur-recettes.html` s'ouvre aussi en double-clic pour consulter

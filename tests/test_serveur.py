@@ -478,3 +478,64 @@ class PageIntrouvable(unittest.TestCase):
             self.assertEqual(code, 404)
             self.assertNotIn(s.DIR, page)
             self.assertNotIn("serveur_recettes.py", page)           # ni la liste des fichiers
+
+
+class TestChoixDuPort(unittest.TestCase):
+    """Port occupé ou interdit : on passe au suivant ; serveur déjà lancé : on le réutilise."""
+
+    def setUp(self):
+        self.ancien = s.PORT
+        self.ouverts = []
+
+    def tearDown(self):
+        s.PORT = self.ancien
+        for srv in self.ouverts:
+            srv.server_close()
+
+    def occuper(self, port=0):
+        srv = s.ThreadingHTTPServer(("127.0.0.1", port), s.Handler)
+        self.ouverts.append(srv)
+        return srv
+
+    def port_libre_consecutif(self):
+        for _ in range(50):
+            a = self.occuper()
+            base = a.server_address[1]
+            try:
+                b = s.ThreadingHTTPServer(("127.0.0.1", base + 1), s.Handler)
+            except OSError:
+                continue
+            b.server_close()
+            return a, base
+        self.skipTest("pas de deux ports consécutifs libres")
+
+    def test_port_occupe_par_un_autre_programme_passe_au_suivant(self):
+        autre, base = self.port_libre_consecutif()                    # occupé, mais ne répond pas comme un serveur de recettes
+        s.PORT = base
+        srv, port, deja = s.ouvrir_serveur()
+        self.ouverts.append(srv)
+        self.assertFalse(deja)
+        self.assertEqual(port, base + 1)
+
+    def test_serveur_deja_lance_est_reconnu(self):
+        srv = self.occuper()
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        port = srv.server_address[1]
+        self.addCleanup(srv.shutdown)
+        s.PORT = port
+        self.assertTrue(s.serveur_deja_lance(port))
+        trouve, p, deja = s.ouvrir_serveur()
+        self.assertIsNone(trouve)
+        self.assertEqual((p, deja), (port, True))
+
+    def test_aucun_port_libre_quitte_avec_un_message(self):
+        a = self.occuper()
+        s.PORT = a.server_address[1]
+        ancien = s.ESSAIS_PORT
+        s.ESSAIS_PORT = 1
+        try:
+            with self.assertRaises(SystemExit) as cm:
+                s.ouvrir_serveur()
+        finally:
+            s.ESSAIS_PORT = ancien
+        self.assertIn("Aucun port libre", str(cm.exception))
