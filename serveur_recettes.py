@@ -7,6 +7,7 @@ Lancement :
   python serveur_recettes.py --lan           → accessible depuis le Wi-Fi (téléphone, tablette…)
   python serveur_recettes.py --no-browser    → ne pas ouvrir le navigateur automatiquement
 Port personnalisé : variable d'environnement RECETTES_PORT (défaut 8765)
+Si ce port est occupé, le suivant est essayé (jusqu'à 8784) ; si c'est déjà ce serveur, la page s'ouvre dessus.
 Compatible Windows, Linux, macOS et Android (Termux).
 
 Les recettes importées sont enregistrées dans recettes.json,
@@ -16,7 +17,7 @@ import collections, html, ipaddress, json, os, re, shutil, socket, subprocess, s
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from urllib.robotparser import RobotFileParser
 
 PORT = int(os.environ.get("RECETTES_PORT", 8765))
@@ -33,7 +34,7 @@ BASE = "https://www.marmiton.org"
 PAUSE = 1.5  # secondes minimum entre deux requêtes sortantes
 # Le serveur s'identifie (au lieu d'imiter un navigateur) et applique les règles du robots.txt
 # visant ce nom. Si un site refuse cet identifiant : RECETTES_USER_AGENT="Mozilla/5.0 …"
-VERSION = "1.7.0"       # version de l'application (SemVer) ; voir CHANGELOG.md. Même valeur dans generateur-recettes.html
+VERSION = "1.7.1"       # version de l'application (SemVer) ; voir CHANGELOG.md. Même valeur dans generateur-recettes.html
 API_VERSION = 2          # 2 : l'import se fait en POST (X-Recettes) ; l'interface s'adapte aux serveurs plus anciens
 ROBOTS_NOM = "RecettesPerso"
 USER_AGENT = (os.environ.get("RECETTES_USER_AGENT", "").strip() or
@@ -942,6 +943,33 @@ def ip_locale():
         return "?"
 
 
+ESSAIS_PORT = 20                                             # PORT, PORT+1… : premier port libre
+
+
+def serveur_deja_lance(port):
+    """True si c'est un serveur de recettes qui répond sur ce port (et non un autre programme)."""
+    try:
+        with build_opener(ProxyHandler({})).open(f"http://127.0.0.1:{port}/api/ping", timeout=2) as r:
+            return json.load(r).get("api") is not None
+    except (HTTPError, URLError, OSError, ValueError, AttributeError):
+        return False
+
+
+def ouvrir_serveur():
+    """(srv, port, deja) : un serveur à l'écoute sur le premier port libre à partir de PORT, ou deja=True
+    si un serveur de recettes tourne déjà sur l'un d'eux (srv vaut alors None). Sinon quitte avec l'erreur."""
+    erreur = None
+    for port in range(PORT, min(PORT + ESSAIS_PORT, 65536)):
+        try:
+            return ThreadingHTTPServer((HOST, port), Handler), port, False
+        except OSError as e:                             # occupé (98/48/10048), interdit ou réservé par Windows (10013)…
+            erreur = erreur or e
+            if serveur_deja_lance(port):
+                return None, port, True
+    sys.exit(f"✗ Aucun port libre entre {PORT} et {PORT + ESSAIS_PORT - 1} : {erreur}\n"
+             f"  (choisis-en un autre : RECETTES_PORT=9000 python {os.path.basename(__file__)})")
+
+
 def ouvrir_navigateur(url):
     if "--no-browser" in sys.argv:
         return
@@ -1094,18 +1122,20 @@ if __name__ == "__main__":
     page = trouver_page()
     if not page:
         print(f"⚠ Aucune page HTML trouvée dans {DIR}")
-    try:
-        srv = ThreadingHTTPServer((HOST, PORT), Handler)
-    except OSError as e:
-        sys.exit(f"✗ Impossible d'ouvrir le port {PORT} : {e}\n"
-                 f"  (serveur déjà lancé ? sinon : RECETTES_PORT=8766 python {os.path.basename(__file__)})")
-
-    url = f"http://localhost:{PORT}/"
+    srv, port, deja = ouvrir_serveur()
+    url = f"http://localhost:{port}/"
+    if deja:
+        print(f"🍲 Le générateur de recettes tourne déjà sur {url}")
+        print("   Pour l'arrêter : Ctrl+C dans sa fenêtre noire (ou ferme-la).")
+        ouvrir_navigateur(url)
+        sys.exit(0)
+    if port != PORT:
+        print(f"⚠ Le port {PORT} n'est pas disponible : utilisation du port {port}.")
     print(f"🍲 Générateur de recettes {VERSION} → {url}")
     if page:
         print(f"   Page : {page}")
     if LAN:
-        print(f"   Réseau local     → http://{ip_locale()}:{PORT}/")
+        print(f"   Réseau local     → http://{ip_locale()}:{port}/")
         print("   ⚠ Accessible à tout appareil du même Wi-Fi")
     migration = migrer_base()
     if migration:
