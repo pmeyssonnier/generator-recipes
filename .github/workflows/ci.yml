@@ -45,7 +45,10 @@ jobs:
         with:
           python-version: "3.13"
       - name: Installer Playwright et le navigateur
+        # Le miroir apt d'Ubuntu se fige parfois sur un paquet : on le fait réessayer, puis échouer vite (au lieu de rester bloqué).
+        timeout-minutes: 8
         run: |
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/80-reessais
           python -m pip install playwright pdfplumber
           python -m playwright install --with-deps ${{ matrix.navigateur }}
       - name: Nom d'hôte de test (monpc.local)
