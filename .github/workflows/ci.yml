@@ -60,6 +60,9 @@ jobs:
         timeout-minutes: 8
         run: |
           printf 'Acquire::Retries "5";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' | sudo tee /etc/apt/apt.conf.d/80-reessais
+          # Le miroir Azure servait un paquet de polices en boucle : miroir officiel d'abord, Azure en secours (apt bascule tout seul).
+          printf 'http://archive.ubuntu.com/ubuntu/\tpriority:1\nhttp://azure.archive.ubuntu.com/ubuntu/\tpriority:2\n' | sudo tee /etc/apt/apt-mirrors.txt
+          sudo apt-get update
           python -m playwright install --with-deps ${{ matrix.navigateur }}
       - name: Nom d'hôte de test (monpc.local)
         run: echo "127.0.0.1 monpc.local" | sudo tee -a /etc/hosts
