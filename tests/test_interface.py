@@ -507,6 +507,41 @@ class Interface(unittest.TestCase):
         self.assertEqual(compte(), 3)
         self.assertEqual(self.page.locator(".chip").count(), 0)
 
+    def test_filtres_equivalents_francais_neerlandais(self):
+        """« poulet » trouve « kip » et inversement ; mots entiers (« ui » ne trouve pas « huile ») ; catégories néerlandaises."""
+        self.ouvrir()
+        self.charger([recette(1, ingredients=["500 g kipfilet", "2 uien", "1 eetlepel olijfolie"], categorie="Hoofdgerecht"),
+                      recette(2, ingredients=["2 blancs de poulet", "1 oignon", "huile d'olive"], categorie="Plat principal"),
+                      recette(3, ingredients=["300 g de veau", "50 ml d'huile", "2 poires", "1 poireau"]),
+                      recette(4, ingredients=["400 g gehakt", "3 aardappelen", "1 tomaat"])])
+        compte = lambda: self.page.locator(".card").count()           # noqa: E731
+
+        def avec(terme, regle="avec"):
+            self.page.click("#btnReset")
+            self.page.fill(f"#{regle}In", terme)
+            self.page.press(f"#{regle}In", "Enter")
+            return self.noms_affiches()
+        self.assertEqual(avec("poulet"), ["Recette 1", "Recette 2"])        # le français trouve le néerlandais
+        self.assertEqual(avec("kip"), ["Recette 1", "Recette 2"])           # et inversement
+        self.assertEqual(avec("kippen"), ["Recette 1", "Recette 2"])        # variante néerlandaise
+        self.assertEqual(avec("oignon"), ["Recette 1", "Recette 2"])
+        self.assertEqual(avec("ui"), ["Recette 1", "Recette 2"])            # pas « huile » ni « fruit »
+        self.assertEqual(avec("huile"), ["Recette 1", "Recette 2", "Recette 3"])
+        self.assertEqual(avec("olie"), ["Recette 1", "Recette 2", "Recette 3"])
+        self.assertEqual(avec("poire"), ["Recette 3"])                      # « poire » ne trouve pas « poireau » seul
+        self.assertEqual(avec("pomme de terre"), ["Recette 4"])
+        self.assertEqual(avec("viande hachée"), ["Recette 4"])
+        self.assertEqual(avec("poulet", "sans"), ["Recette 3", "Recette 4"])
+        self.assertEqual(avec("kip", "sans"), ["Recette 3", "Recette 4"])
+        self.assertEqual(avec("quinoa"), [])                                # terme inconnu : recherche de texte habituelle
+        self.page.click("#btnReset")
+        self.page.fill("#q", "kip")                                          # la recherche libre aussi (nom, catégorie…)
+        self.assertEqual(compte(), 0)                                        # aucun nom ne contient « kip » ni « poulet »
+        # catégories néerlandaises regroupées avec les françaises
+        self.page.click("#btnReset")
+        cats = self.page.eval_on_selector_all("#cat option", "o => o.map(x => x.textContent.trim())")
+        self.assertEqual(len([c for c in cats if "principal" in c.lower() or "hoofdgerecht" in c.lower()]), 1, cats)
+
     def test_filtre_ingredients_clavier_mobile_et_perte_de_focus(self):
         self.ouvrir()
         self.charger([recette(1, ingredients=["poulet"]), recette(2, ingredients=["veau"])])
