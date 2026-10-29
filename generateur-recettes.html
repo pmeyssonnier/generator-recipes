@@ -158,7 +158,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 
 <header>
   <button type="button" id="btnFiltres" aria-controls="filtres" aria-expanded="false">☰ Filtres <span class="badge" id="nbFiltres" hidden>0</span></button>
-  <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.7.1</small></h1>
+  <h1>🍲 Générateur de recettes <small class="version" title="Version de la page">v1.8.0</small></h1>
   <div class="actions">
     <span class="count" id="count">Aucune recette</span>
     <button type="button" class="primary" id="btnCharger">📂 Charger JSON</button>
@@ -365,6 +365,105 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
 
   // ---------- Utilitaires ----------
   const norm = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  // ---------- Équivalents français / néerlandais (ingrédients courants) ----------
+  // « poulet » trouve aussi « kip », et inversement. fr = recherche dans le texte (« carotte » trouve « carottes »),
+  // nl = mots entiers seulement (« ui » ne doit pas trouver « huile »). Mots sans accents, en minuscules.
+  const EQUIV = [
+    ["poulet|volaille", "kip kippen kipfilet kippenborst kippendij kippenvlees"],
+    ["boeuf|bœuf", "rundvlees rundsvlees rund rundergehakt"],
+    ["viande hachee", "gehakt"],
+    ["porc", "varkensvlees varken varkenshaas varkensfilet"],
+    ["agneau", "lamsvlees lam lamsgehakt"],
+    ["veau", "kalfsvlees kalf"],
+    ["jambon", "ham"],
+    ["lardons", "spek spekjes spekblokjes ontbijtspek"],
+    ["saucisse", "worst worstjes"],
+    ["poisson", "vis"],
+    ["saumon", "zalm"],
+    ["thon", "tonijn"],
+    ["cabillaud", "kabeljauw"],
+    ["crevette", "garnaal garnalen"],
+    ["moule", "mossel mosselen"],
+    ["oeuf|œuf", "ei eieren eigeel eiwit"],
+    ["lait", "melk"],
+    ["beurre", "boter"],
+    ["creme", "room slagroom kookroom"],
+    ["fromage", "kaas"],
+    ["yaourt|yogourt", "yoghurt yogurt"],
+    ["farine", "bloem"],
+    ["sucre", "suiker"],
+    ["sucre glace", "poedersuiker"],
+    ["sel", "zout"],
+    ["poivre", "peper"],
+    ["ail", "knoflook knoflookteen knoflooktenen"],
+    ["oignon", "ui uien uitje uitjes"],
+    ["echalote", "sjalot sjalotten"],
+    ["carotte", "wortel wortelen wortels peen winterpeen"],
+    ["pomme de terre|pommes de terre", "aardappel aardappelen aardappels"],
+    ["tomate", "tomaat tomaten"],
+    ["champignon", "paddenstoel paddenstoelen"],
+    ["poireau", "prei"],
+    ["epinard", "spinazie"],
+    ["chou", "kool"],
+    ["chou-fleur", "bloemkool"],
+    ["brocoli", "broccoli"],
+    ["haricot vert|haricots verts", "sperziebonen sperzieboon"],
+    ["haricot", "bonen boon"],
+    ["petit pois|petits pois", "erwten erwt"],
+    ["salade|laitue", "sla"],
+    ["concombre", "komkommer"],
+    ["celeri", "selderij"],
+    ["fenouil", "venkel"],
+    ["potiron|courge", "pompoen"],
+    ["betterave", "biet bieten"],
+    ["endive", "witlof"],
+    ["citron", "citroen citroenen"],
+    ["orange", "sinaasappel sinaasappelen"],
+    ["pomme", "appel appels appelen"],
+    ["poire", "peer peren"],
+    ["fraise", "aardbei aardbeien"],
+    ["framboise", "framboos frambozen"],
+    ["banane", "banaan bananen"],
+    ["noix", "noten walnoot walnoten"],
+    ["amande", "amandel amandelen"],
+    ["noisette", "hazelnoot hazelnoten"],
+    ["riz", "rijst"],
+    ["pates", "pasta deegwaren"],
+    ["pain", "brood"],
+    ["huile", "olie olijfolie zonnebloemolie kokosolie arachideolie"],
+    ["vinaigre", "azijn"],
+    ["moutarde", "mosterd"],
+    ["miel", "honing"],
+    ["chocolat", "chocolade"],
+    ["cannelle", "kaneel"],
+    ["gingembre", "gember"],
+    ["persil", "peterselie"],
+    ["basilic", "basilicum"],
+    ["coriandre", "koriander"],
+    ["thym", "tijm"],
+    ["romarin", "rozemarijn"],
+    ["ciboulette", "bieslook"],
+    ["menthe", "munt"],
+    ["muscade", "nootmuskaat"],
+    ["vin", "wijn"],
+    ["biere", "bier"],
+    ["lentilles", "linzen"],
+    ["pois chiches", "kikkererwten"],
+    ["levure", "gist"],
+  ];
+  const EQUIV_MAP = new Map();
+  for (const [fr, nl] of EQUIV) {
+    const mots = [...fr.split("|"), ...nl.split(" ")];
+    const g = { rx: new RegExp("(^|[^a-zœ])(" + mots.map(m => m.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")).join("|") + ")[sx]?($|[^a-zœ])") };
+    for (const m of mots) if (!EQUIV_MAP.has(m)) EQUIV_MAP.set(m, g);
+  }
+  // `texte` a déjà passé par norm(). Un terme connu cherche tous ses équivalents, en mots entiers (pluriel en s/x accepté :
+  // « ui » ne trouve pas « huile », « poire » ne trouve pas « poireau ») ; un terme inconnu : simple recherche de texte.
+  function contient(texte, terme) {
+    const t = norm(terme).trim();
+    const g = EQUIV_MAP.get(t) || EQUIV_MAP.get(t.replace(/s$/, ""));
+    return g ? g.rx.test(texte) : texte.includes(t);
+  }
   const esc = s => String(s ?? "").replace(/[&<>"']/g,
     c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
   // Nombres mixtes : « 1 1/2 » → 1 suivi de 1/2 en petit, en exposant. Une fraction seule (« 1/2 gousse ») reste telle quelle.
@@ -381,7 +480,10 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // ---------- Catégories (variantes regroupées), sources, classement des recettes eFarmz ----------
   const majuscule = s => s.charAt(0).toUpperCase() + s.slice(1);
   // Clé de regroupement : sans accents ni majuscules, au singulier (« Entrées » = « Entrée »), quelques synonymes
-  const CAT_ALIAS = { desert: "dessert", plat: "plat principal", "plat de resistance": "plat principal", apero: "aperitif" };
+  const CAT_ALIAS = { desert: "dessert", plat: "plat principal", "plat de resistance": "plat principal", apero: "aperitif",
+                      hoofdgerecht: "plat principal", hoofdgerechten: "plat principal", voorgerecht: "entree", voorgerechten: "entree",
+                      nagerecht: "dessert", nagerechten: "dessert", bijgerecht: "accompagnement", bijgerechten: "accompagnement",
+                      drank: "boisson", dranken: "boisson", saus: "sauce", sauzen: "sauce", borrelhapjes: "aperitif", borrelhapje: "aperitif" };
   const CAT_NOMS = { entree: "Entrée", "plat principal": "Plat principal", dessert: "Dessert", accompagnement: "Accompagnement",
                      boisson: "Boisson", sauce: "Sauce", aperitif: "Apéritif", "amuse gueule": "Amuse-gueule" };
   const CATLAB = {};                                   // clé → libellé affiché (la variante la plus courte rencontrée)
@@ -645,9 +747,9 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   function filtrer() {
     const q = norm(st.q).trim();
     const out = recettes.filter(r => {
-      if (q && !r._txt.includes(q)) return false;
-      if (termes("avec").some(x => !r._ing.includes(norm(x)))) return false;
-      if (termes("sans").some(x => r._ing.includes(norm(x)))) return false;
+      if (q && !contient(r._txt, q)) return false;
+      if (termes("avec").some(x => !contient(r._ing, x))) return false;
+      if (termes("sans").some(x => contient(r._ing, x))) return false;
       if (st.tmax && (r._tps == null || r._tps > st.tmax)) return false;
       if (st.nmin && (r._note ?? 0) < st.nmin) return false;
       if (st.cat && !r._cats.includes(st.cat)) return false;
@@ -806,7 +908,7 @@ textarea{width:100%;min-height:300px;font:inherit;font-size:.9rem;padding:10px;b
   // Un serveur local ancien (avant le POST) répond 501 / 405 : l'import se rabat alors sur GET,
   // et l'état du serveur indique qu'il faut le mettre à jour (git pull, puis relancer).
   let serveurAncien = false;
-  const VERSION = "1.7.1";                   // version de la page (même valeur que serveur_recettes.py)
+  const VERSION = "1.8.0";                   // version de la page (même valeur que serveur_recettes.py)
   function badgeServeur(base, fichier, version) {
     const s = $("srvStatus");
     s.className = "srv on";

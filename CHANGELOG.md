@@ -8,6 +8,11 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+## [1.8.0] - 2026-10-29
+
+### Ajouté
+- **Recettes en néerlandais** : les filtres « avec » / « sans » et la recherche reconnaissent environ 80 ingrédients courants dans les deux langues (« poulet » trouve « kip », « ui » trouve « oignon », « olie » trouve « huile », et inversement). Les mots néerlandais sont cherchés en mots entiers (« ui » ne trouve pas « huile »), un pluriel en s est accepté. Les catégories néerlandaises (hoofdgerecht, voorgerecht, nagerecht, bijgerecht, dranken, saus…) rejoignent les catégories françaises. Un ingrédient absent de la liste reste cherché comme avant, par simple recherche de texte.
+
 ## [1.7.1] - 2026-10-23
 
 ### Corrigé
@@ -237,7 +242,8 @@ Première version publiée.
 - Recherche Ricardo (plan du site en erreur 504) : Ricardo reste utilisable par URL.
 - Outils de lecture des plans de site et d'extraction de mots-clés, devenus inutiles.
 
-[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.7.1...HEAD
+[Non publié]: https://github.com/pmeyssonnier/generator-recipes/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.8.0
 [1.7.1]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.7.1
 [1.7.0]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.7.0
 [1.6.3]: https://github.com/pmeyssonnier/generator-recipes/releases/tag/v1.6.3
