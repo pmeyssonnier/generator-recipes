@@ -10,8 +10,10 @@ permissions:
   contents: read
 
 jobs:
+  # Linux fixé sur Ubuntu 24.04 : « ubuntu-latest » est passé à 26.04, où Python 3.9 n'est pas fourni
+  # et où WebKit de Playwright ne démarre pas (libicudata.so.74 absente).
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +34,7 @@ jobs:
 
   interface:
     name: interface (${{ matrix.navigateur }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
