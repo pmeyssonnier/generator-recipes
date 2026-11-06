@@ -8,6 +8,9 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Corrigé
+- **Import PDF eFarmz** : une capitale isolée par le PDF n'est plus séparée du reste du mot (« 3/4 C itron » devient « 3/4 citron »).
+
 ## [1.8.0] - 2026-10-29
 
 ### Ajouté
