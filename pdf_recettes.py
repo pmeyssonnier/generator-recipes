@@ -163,6 +163,17 @@ def ligature(txt):
     return txt
 
 
+def recoller_initiale(morceaux):
+    """Le PDF isole parfois la capitale d'un libellé : ["C", "itron"] → ["Citron"] (et non « C itron »)."""
+    out = []
+    for t in morceaux:
+        if out and re.fullmatch(r"[A-ZÀ-ÖØ-Þ]", out[-1]) and t[:1].islower():
+            out[-1] += t
+        else:
+            out.append(t)
+    return out
+
+
 def phrase(txt):
     """TITRE EN MAJUSCULES → « Titre en majuscules », avec œ."""
     txt = ligature(re.sub(r"\s+", " ", txt).strip().lower())
@@ -250,7 +261,7 @@ def lire_page(page, numero, fichier, personnes):
                 continue                                      # BE (origine belge), etc.
             else:
                 morceaux.append(t)
-        texte = " ".join(morceaux)
+        texte = " ".join(recoller_initiale(morceaux))
         unite = ""
         m = re.search(r"\(([^()]{1,10})\)\s*$", texte)
         if m and (qte or m.group(1).strip().lower() in UNITES_CONNUES):    # « Sucre (càc) » sans quantité : « Sucre »
