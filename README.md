@@ -223,6 +223,8 @@ La source **eFarmz (PDF)** de la fenêtre d'import lit les PDF que tu as dépos�
 **`eFarmz/`**, créé à côté de `serveur_recettes.py` (donc à côté de `recettes.json`). Aucune connexion à un site : tout
 se passe sur ton appareil. (Une récupération automatique depuis ton compte pourra venir plus tard.)
 
+0. Pour récupérer les PDF (`v###.pdf`, `l###.pdf`, `p###.pdf`), `outils/telecharger_pdf_efarmz.py` les télécharge et les range
+   dans un zip (usage perso ; prévu pour Google Colab, utilisable en ligne de commande). Dézippe-le dans `eFarmz/`.
 1. Dépose tes PDF dans `eFarmz/` (sur Termux : `cp /storage/emulated/0/Download/v375.pdf eFarmz/`).
 2. 🌐 Importer → source **eFarmz (PDF)** → choisis le nombre de personnes (colonne « 1p … 6p » du tableau) →
    **Lire les PDF**. Un filtre (titre ou nom de fichier) est facultatif.

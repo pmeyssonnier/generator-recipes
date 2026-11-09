@@ -8,6 +8,9 @@ pour une correction. La version est définie dans `serveur_recettes.py` (`VERSIO
 
 ## [Non publié]
 
+### Ajouté
+- `outils/telecharger_pdf_efarmz.py` : télécharge les PDF eFarmz (préfixes v, l, p + 3 chiffres) pour le dossier `eFarmz/` (Colab ou ligne de commande).
+
 ### Corrigé
 - **Import PDF eFarmz** : une capitale isolée par le PDF n'est plus séparée du reste du mot (« 3/4 C itron » devient « 3/4 citron »).
 
