@@ -189,6 +189,17 @@ class SourceEfarmz(unittest.TestCase):
             self.assertEqual(self.requete("/api/recipe?url=efarmz%3Av375.pdf%234", post=True)[0], 503)
         self.assertEqual(self.requete("/api/ping")[0], 200)
 
+class CapitaleIsolee(unittest.TestCase):
+    def test_capitale_recollee(self):
+        self.assertEqual(pdf.recoller_initiale(["C", "itron"]), ["Citron"])
+        self.assertEqual(" ".join(pdf.recoller_initiale(["É", "chalote", "hachée"])), "Échalote hachée")
+
+    def test_autres_libelles_inchanges(self):
+        for m in (["Citron"], ["Vitamine", "C"], ["Sel", "à", "poivre"], ["C", "D"], ["Huile", "d'olive"]):
+            self.assertEqual(pdf.recoller_initiale(m), m)
+        self.assertEqual(pdf.formater("3/4", "", "citron", False), "3/4 citron")
+
+
 class NombresMixtes(unittest.TestCase):
     def test_fraction_recollee_separee(self):
         self.assertEqual(pdf.nombre_mixte("11/2"), "1 1/2")
